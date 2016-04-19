@@ -78,8 +78,9 @@ namespace MediaBrowser.Server.Implementations.Persistence
         private IDbCommand _saveAncestorCommand;
 
         private IDbCommand _updateInheritedRatingCommand;
+        private IDbCommand _updateInheritedTagsCommand;
 
-        private const int LatestSchemaVersion = 58;
+        private const int LatestSchemaVersion = 63;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SqliteItemRepository"/> class.
@@ -123,7 +124,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
             _connection = await SqliteExtensions.ConnectToDb(dbFile, Logger).ConfigureAwait(false);
 
             var createMediaStreamsTableCommand
-               = "create table if not exists mediastreams (ItemId GUID, StreamIndex INT, StreamType TEXT, Codec TEXT, Language TEXT, ChannelLayout TEXT, Profile TEXT, AspectRatio TEXT, Path TEXT, IsInterlaced BIT, BitRate INT NULL, Channels INT NULL, SampleRate INT NULL, IsDefault BIT, IsForced BIT, IsExternal BIT, Height INT NULL, Width INT NULL, AverageFrameRate FLOAT NULL, RealFrameRate FLOAT NULL, Level FLOAT NULL, PixelFormat TEXT, BitDepth INT NULL, IsAnamorphic BIT NULL, RefFrames INT NULL, IsCabac BIT NULL, CodecTag TEXT NULL, Comment TEXT NULL, PRIMARY KEY (ItemId, StreamIndex))";
+               = "create table if not exists mediastreams (ItemId GUID, StreamIndex INT, StreamType TEXT, Codec TEXT, Language TEXT, ChannelLayout TEXT, Profile TEXT, AspectRatio TEXT, Path TEXT, IsInterlaced BIT, BitRate INT NULL, Channels INT NULL, SampleRate INT NULL, IsDefault BIT, IsForced BIT, IsExternal BIT, Height INT NULL, Width INT NULL, AverageFrameRate FLOAT NULL, RealFrameRate FLOAT NULL, Level FLOAT NULL, PixelFormat TEXT, BitDepth INT NULL, IsAnamorphic BIT NULL, RefFrames INT NULL, CodecTag TEXT NULL, Comment TEXT NULL, NalLengthSize TEXT NULL, PRIMARY KEY (ItemId, StreamIndex))";
 
             string[] queries = {
 
@@ -135,7 +136,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
                                 "create table if not exists AncestorIds (ItemId GUID, AncestorId GUID, AncestorIdText TEXT, PRIMARY KEY (ItemId, AncestorId))",
                                 "create index if not exists idx_AncestorIds1 on AncestorIds(AncestorId)",
                                 "create index if not exists idx_AncestorIds2 on AncestorIds(AncestorIdText)",
-                                
+
                                 "create table if not exists People (ItemId GUID, Name TEXT NOT NULL, Role TEXT, PersonType TEXT, SortOrder int, ListOrder int)",
                                 "create index if not exists idxPeopleItemId on People(ItemId)",
                                 "create index if not exists idxPeopleName on People(Name)",
@@ -224,6 +225,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
             _connection.AddColumn(Logger, "TypedBaseItems", "CriticRating", "Float");
             _connection.AddColumn(Logger, "TypedBaseItems", "CriticRatingSummary", "Text");
             _connection.AddColumn(Logger, "TypedBaseItems", "DateModifiedDuringLastRefresh", "DATETIME");
+            _connection.AddColumn(Logger, "TypedBaseItems", "InheritedTags", "Text");
 
             PrepareStatements();
 
@@ -387,9 +389,9 @@ namespace MediaBrowser.Server.Implementations.Persistence
             "BitDepth",
             "IsAnamorphic",
             "RefFrames",
-            "IsCabac",
             "CodecTag",
-            "Comment"
+            "Comment",
+            "NalLengthSize"
         };
 
         /// <summary>
@@ -402,7 +404,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
                 "guid",
                 "type",
                 "data",
-				"Path",
+                "Path",
                 "StartDate",
                 "EndDate",
                 "ChannelId",
@@ -462,7 +464,8 @@ namespace MediaBrowser.Server.Implementations.Persistence
                 "TrailerTypes",
                 "CriticRating",
                 "CriticRatingSummary",
-                "DateModifiedDuringLastRefresh"
+                "DateModifiedDuringLastRefresh",
+                "InheritedTags"
             };
             _saveItemCommand = _connection.CreateCommand();
             _saveItemCommand.CommandText = "replace into TypedBaseItems (" + string.Join(",", saveColumns.ToArray()) + ") values (";
@@ -540,8 +543,13 @@ namespace MediaBrowser.Server.Implementations.Persistence
 
             _updateInheritedRatingCommand = _connection.CreateCommand();
             _updateInheritedRatingCommand.CommandText = "Update TypedBaseItems set InheritedParentalRatingValue=@InheritedParentalRatingValue where Guid=@Guid";
-            _updateInheritedRatingCommand.Parameters.Add(_updateInheritedRatingCommand, "@InheritedParentalRatingValue");
             _updateInheritedRatingCommand.Parameters.Add(_updateInheritedRatingCommand, "@Guid");
+            _updateInheritedRatingCommand.Parameters.Add(_updateInheritedRatingCommand, "@InheritedParentalRatingValue");
+
+            _updateInheritedTagsCommand = _connection.CreateCommand();
+            _updateInheritedTagsCommand.CommandText = "Update TypedBaseItems set InheritedTags=@InheritedTags where Guid=@Guid";
+            _updateInheritedTagsCommand.Parameters.Add(_updateInheritedTagsCommand, "@Guid");
+            _updateInheritedTagsCommand.Parameters.Add(_updateInheritedTagsCommand, "@InheritedTags");
         }
 
         /// <summary>
@@ -715,7 +723,15 @@ namespace MediaBrowser.Server.Implementations.Persistence
 
                     _saveItemCommand.GetParameter(index++).Value = item.ServiceName;
 
-                    _saveItemCommand.GetParameter(index++).Value = string.Join("|", item.Tags.ToArray());
+                    if (item.Tags.Count > 0)
+                    {
+                        _saveItemCommand.GetParameter(index++).Value = string.Join("|", item.Tags.ToArray());
+                    }
+                    else
+                    {
+                        _saveItemCommand.GetParameter(index++).Value = null;
+                    }
+
                     _saveItemCommand.GetParameter(index++).Value = item.IsFolder;
 
                     _saveItemCommand.GetParameter(index++).Value = item.GetBlockUnratedType().ToString();
@@ -744,7 +760,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
                     _saveItemCommand.GetParameter(index++).Value = item.SourceType.ToString();
 
                     var trailer = item as Trailer;
-                    if (trailer != null)
+                    if (trailer != null && trailer.TrailerTypes.Count > 0)
                     {
                         _saveItemCommand.GetParameter(index++).Value = string.Join("|", trailer.TrailerTypes.Select(i => i.ToString()).ToArray());
                     }
@@ -763,6 +779,16 @@ namespace MediaBrowser.Server.Implementations.Persistence
                     else
                     {
                         _saveItemCommand.GetParameter(index++).Value = item.DateModifiedDuringLastRefresh.Value;
+                    }
+
+                    var inheritedTags = item.GetInheritedTags();
+                    if (inheritedTags.Count > 0)
+                    {
+                        _saveItemCommand.GetParameter(index++).Value = string.Join("|", inheritedTags.ToArray());
+                    }
+                    else
+                    {
+                        _saveItemCommand.GetParameter(index++).Value = null;
                     }
 
                     _saveItemCommand.Transaction = transaction;
@@ -1936,7 +1962,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
                 var index = 0;
                 foreach (var type in query.ExcludeTrailerTypes)
                 {
-                    clauses.Add("TrailerTypes not like @TrailerTypes" + index);
+                    clauses.Add("(TrailerTypes is null OR TrailerTypes not like @TrailerTypes" + index + ")");
                     cmd.Parameters.Add(cmd, "@TrailerTypes" + index, DbType.String).Value = "%" + type + "%";
                     index++;
                 }
@@ -2160,8 +2186,16 @@ namespace MediaBrowser.Server.Implementations.Persistence
             var excludeTagIndex = 0;
             foreach (var excludeTag in query.ExcludeTags)
             {
-                whereClauses.Add("Tags not like @excludeTag" + excludeTagIndex);
+                whereClauses.Add("(Tags is null OR Tags not like @excludeTag" + excludeTagIndex + ")");
                 cmd.Parameters.Add(cmd, "@excludeTag" + excludeTagIndex, DbType.String).Value = "%" + excludeTag + "%";
+                excludeTagIndex++;
+            }
+
+            excludeTagIndex = 0;
+            foreach (var excludeTag in query.ExcludeInheritedTags)
+            {
+                whereClauses.Add("(InheritedTags is null OR InheritedTags not like @excludeInheritedTag" + excludeTagIndex +")");
+                cmd.Parameters.Add(cmd, "@excludeInheritedTag" + excludeTagIndex, DbType.String).Value = "%" + excludeTag + "%";
                 excludeTagIndex++;
             }
 
@@ -2225,6 +2259,88 @@ namespace MediaBrowser.Server.Implementations.Persistence
 
         public async Task UpdateInheritedValues(CancellationToken cancellationToken)
         {
+            await UpdateInheritedParentalRating(cancellationToken).ConfigureAwait(false);
+            await UpdateInheritedTags(cancellationToken).ConfigureAwait(false);
+        }
+
+        private async Task UpdateInheritedTags(CancellationToken cancellationToken)
+        {
+            var newValues = new List<Tuple<Guid, string>>();
+
+            using (var cmd = _connection.CreateCommand())
+            {
+                cmd.CommandText = "select Guid,InheritedTags,(select group_concat(Tags, '|') from TypedBaseItems where (guid=outer.guid) OR (guid in (Select AncestorId from AncestorIds where ItemId=Outer.guid))) as NewInheritedTags from typedbaseitems as Outer where NewInheritedTags <> InheritedTags";
+
+                using (var reader = cmd.ExecuteReader(CommandBehavior.SequentialAccess | CommandBehavior.SingleResult))
+                {
+                    while (reader.Read())
+                    {
+                        var id = reader.GetGuid(0);
+                        string value = reader.IsDBNull(2) ? null : reader.GetString(2);
+
+                        newValues.Add(new Tuple<Guid, string>(id, value));
+                    }
+                }
+            }
+
+            Logger.Debug("UpdateInheritedTags - {0} rows", newValues.Count);
+            if (newValues.Count == 0)
+            {
+                return;
+            }
+
+            await WriteLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            IDbTransaction transaction = null;
+
+            try
+            {
+                transaction = _connection.BeginTransaction();
+                
+                foreach (var item in newValues)
+                {
+                    _updateInheritedTagsCommand.GetParameter(0).Value = item.Item1;
+                    _updateInheritedTagsCommand.GetParameter(1).Value = item.Item2;
+
+                    _updateInheritedTagsCommand.Transaction = transaction;
+                    _updateInheritedTagsCommand.ExecuteNonQuery();
+                }
+
+                transaction.Commit();
+            }
+            catch (OperationCanceledException)
+            {
+                if (transaction != null)
+                {
+                    transaction.Rollback();
+                }
+
+                throw;
+            }
+            catch (Exception e)
+            {
+                Logger.ErrorException("Error running query:", e);
+
+                if (transaction != null)
+                {
+                    transaction.Rollback();
+                }
+
+                throw;
+            }
+            finally
+            {
+                if (transaction != null)
+                {
+                    transaction.Dispose();
+                }
+
+                WriteLock.Release();
+            }
+        }
+
+        private async Task UpdateInheritedParentalRating(CancellationToken cancellationToken)
+        {
             var newValues = new List<Tuple<Guid, int>>();
 
             using (var cmd = _connection.CreateCommand())
@@ -2243,6 +2359,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
                 }
             }
 
+            Logger.Debug("UpdateInheritedParentalRatings - {0} rows", newValues.Count);
             if (newValues.Count == 0)
             {
                 return;
@@ -2772,10 +2889,10 @@ namespace MediaBrowser.Server.Implementations.Persistence
                     _saveStreamCommand.GetParameter(index++).Value = stream.BitDepth;
                     _saveStreamCommand.GetParameter(index++).Value = stream.IsAnamorphic;
                     _saveStreamCommand.GetParameter(index++).Value = stream.RefFrames;
-                    _saveStreamCommand.GetParameter(index++).Value = null;
 
                     _saveStreamCommand.GetParameter(index++).Value = stream.CodecTag;
                     _saveStreamCommand.GetParameter(index++).Value = stream.Comment;
+                    _saveStreamCommand.GetParameter(index++).Value = stream.NalLengthSize;
 
                     _saveStreamCommand.Transaction = transaction;
                     _saveStreamCommand.ExecuteNonQuery();
@@ -2924,16 +3041,19 @@ namespace MediaBrowser.Server.Implementations.Persistence
                 item.RefFrames = reader.GetInt32(24);
             }
 
-            // cabac no longer used
+            if (!reader.IsDBNull(25))
+            {
+                item.CodecTag = reader.GetString(25);
+            }
 
             if (!reader.IsDBNull(26))
             {
-                item.CodecTag = reader.GetString(26);
+                item.Comment = reader.GetString(26);
             }
 
             if (!reader.IsDBNull(27))
             {
-                item.Comment = reader.GetString(27);
+                item.NalLengthSize = reader.GetString(27);
             }
 
             return item;
