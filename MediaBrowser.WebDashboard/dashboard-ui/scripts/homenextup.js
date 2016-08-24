@@ -1,28 +1,21 @@
-﻿define(['jQuery'], function ($) {
+﻿define(['components/categorysyncbuttons', 'cardBuilder', 'emby-itemscontainer'], function (categorysyncbuttons, cardBuilder) {
 
-    function reload(page) {
-
-        Dashboard.showLoadingMsg();
-
-        loadNextUp(page, 'home-nextup');
-    }
-
-    function loadNextUp(page) {
-
-        var limit = AppInfo.hasLowImageBandwidth ?
-         16 :
-         24;
+    function getNextUpPromise() {
 
         var query = {
 
-            Limit: limit,
-            Fields: "PrimaryImageAspectRatio,SeriesInfo,DateCreated,SyncInfo",
+            Limit: 24,
+            Fields: "PrimaryImageAspectRatio,SeriesInfo,DateCreated,BasicSyncInfo",
             UserId: Dashboard.getCurrentUserId(),
             ImageTypeLimit: 1,
-            EnableImageTypes: "Primary,Backdrop,Banner,Thumb"
+            EnableImageTypes: "Primary,Backdrop,Thumb"
         };
 
-        ApiClient.getNextUpEpisodes(query).then(function (result) {
+        return ApiClient.getNextUpEpisodes(query);
+    }
+    function loadNextUp(page, promise) {
+
+        promise.then(function (result) {
 
             if (result.Items.length) {
                 page.querySelector('.noNextUpItems').classList.add('hide');
@@ -32,7 +25,7 @@
 
             var html = '';
 
-            html += LibraryBrowser.getPosterViewHtml({
+            html += cardBuilder.getCardsHtml({
                 items: result.Items,
                 shape: "backdrop",
                 showTitle: true,
@@ -50,15 +43,24 @@
             elem.innerHTML = html;
             ImageLoader.lazyChildren(elem);
             Dashboard.hideLoadingMsg();
-
-            LibraryBrowser.setLastRefreshed(page);
         });
     }
+    return function (view, params, tabContent) {
 
-    window.HomePage.renderNextUp = function (page, tabContent) {
-        if (LibraryBrowser.needsRefresh(tabContent)) {
-            reload(tabContent);
-        }
+        var self = this;
+        var nextUpPromise;
+
+        categorysyncbuttons.init(view);
+
+        self.preRender = function () {
+            nextUpPromise = getNextUpPromise();
+        };
+
+        self.renderTab = function () {
+
+            Dashboard.showLoadingMsg();
+            loadNextUp(view, nextUpPromise);
+        };
     };
 
 });

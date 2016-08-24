@@ -7,10 +7,7 @@ using Mono.Nat;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Net;
-using System.Text;
-using System.Threading;
 using MediaBrowser.Common.Threading;
 
 namespace MediaBrowser.Server.Implementations.EntryPoints
@@ -51,8 +48,6 @@ namespace MediaBrowser.Server.Implementations.EntryPoints
 
         void _config_ConfigurationUpdated(object sender, EventArgs e)
         {
-            _config.ConfigurationUpdated -= _config_ConfigurationUpdated;
-
             if (!string.Equals(_lastConfigIdentifier, GetConfigIdentifier(), StringComparison.OrdinalIgnoreCase))
             {
                 if (_isStarted)
@@ -96,7 +91,7 @@ namespace MediaBrowser.Server.Implementations.EntryPoints
             NatUtility.UnhandledException += NatUtility_UnhandledException;
             NatUtility.StartDiscovery();
 
-            _timer = new PeriodicTimer(s => _createdRules = new List<string>(), null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
+            _timer = new PeriodicTimer(ClearCreatedRules, null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
 
             _ssdp.MessageReceived += _ssdp_MessageReceived;
 
@@ -105,12 +100,43 @@ namespace MediaBrowser.Server.Implementations.EntryPoints
             _isStarted = true;
         }
 
+        private void ClearCreatedRules(object state)
+        {
+            _createdRules = new List<string>();
+            _usnsHandled = new List<string>();
+        }
+
         void _ssdp_MessageReceived(object sender, SsdpMessageEventArgs e)
         {
             var endpoint = e.EndPoint as IPEndPoint;
 
-            if (endpoint != null && e.LocalEndPoint != null)
+            if (endpoint == null || e.LocalEndPoint == null)
             {
+                return;
+            }
+
+            string usn;
+            if (!e.Headers.TryGetValue("USN", out usn)) usn = string.Empty;
+
+            string nt;
+            if (!e.Headers.TryGetValue("NT", out nt)) nt = string.Empty;
+
+            // Filter device type
+            if (usn.IndexOf("WANIPConnection:", StringComparison.OrdinalIgnoreCase) == -1 &&
+                     nt.IndexOf("WANIPConnection:", StringComparison.OrdinalIgnoreCase) == -1 &&
+                     usn.IndexOf("WANPPPConnection:", StringComparison.OrdinalIgnoreCase) == -1 &&
+                     nt.IndexOf("WANPPPConnection:", StringComparison.OrdinalIgnoreCase) == -1)
+            {
+                return;
+            }
+
+            var identifier = string.IsNullOrWhiteSpace(usn) ? nt : usn;
+
+            if (!_usnsHandled.Contains(identifier))
+            {
+                _usnsHandled.Add(identifier);
+
+                _logger.Debug("Calling Nat.Handle on " + identifier);
                 NatUtility.Handle(e.LocalEndPoint.Address, e.Message, endpoint, NatProtocol.Upnp);
             }
         }
@@ -139,7 +165,7 @@ namespace MediaBrowser.Server.Implementations.EntryPoints
 
                 CreateRules(device);
             }
-            catch (Exception ex)
+            catch
             {
                 // I think it could be a good idea to log the exception because 
                 //   you are using permanent portmapping here (never expire) and that means that next time
@@ -154,6 +180,7 @@ namespace MediaBrowser.Server.Implementations.EntryPoints
         }
 
         private List<string> _createdRules = new List<string>();
+        private List<string> _usnsHandled = new List<string>();
         private void CreateRules(INatDevice device)
         {
             // On some systems the device discovered event seems to fire repeatedly
@@ -225,31 +252,6 @@ namespace MediaBrowser.Server.Implementations.EntryPoints
             finally
             {
                 _isStarted = false;
-            }
-        }
-
-        private class LogWriter : TextWriter
-        {
-            private readonly ILogger _logger;
-
-            public LogWriter(ILogger logger)
-            {
-                _logger = logger;
-            }
-
-            public override Encoding Encoding
-            {
-                get { return Encoding.UTF8; }
-            }
-
-            public override void WriteLine(string format, params object[] arg)
-            {
-                _logger.Debug(format, arg);
-            }
-
-            public override void WriteLine(string value)
-            {
-                _logger.Debug(value);
             }
         }
     }

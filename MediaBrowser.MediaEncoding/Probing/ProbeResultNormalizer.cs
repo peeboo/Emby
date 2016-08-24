@@ -1,5 +1,4 @@
-﻿using MediaBrowser.Common.IO;
-using MediaBrowser.Model.Dto;
+﻿using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Extensions;
 using System;
@@ -10,7 +9,7 @@ using System.Linq;
 using System.Text;
 using System.Xml;
 using CommonIO;
-using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.MediaInfo;
 
@@ -140,10 +139,14 @@ namespace MediaBrowser.MediaEncoding.Probing
                     var parts = iTunEXTC.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
                     // Example 
                     // mpaa|G|100|For crude humor
-                    if (parts.Length == 4)
+                    if (parts.Length > 1)
                     {
                         info.OfficialRating = parts[1];
-                        info.OfficialRatingDescription = parts[3];
+
+                        if (parts.Length > 3)
+                        {
+                            info.OfficialRatingDescription = parts[3];
+                        }
                     }
                 }
 
@@ -166,6 +169,12 @@ namespace MediaBrowser.MediaEncoding.Probing
                 }
 
                 ExtractTimestamp(info);
+
+                var stereoMode = GetDictionaryValue(tags, "stereo_mode");
+                if (string.Equals(stereoMode, "left_right", StringComparison.OrdinalIgnoreCase))
+                {
+                    info.Video3DFormat = Video3DFormat.FullSideBySide;
+                }
             }
 
             return info;
@@ -396,7 +405,8 @@ namespace MediaBrowser.MediaEncoding.Probing
             // These are mp4 chapters
             if (string.Equals(streamInfo.codec_name, "mov_text", StringComparison.OrdinalIgnoreCase))
             {
-                return null;
+                // Edit: but these are also sometimes subtitles?
+                //return null;
             }
 
             var stream = new MediaStream
@@ -405,8 +415,22 @@ namespace MediaBrowser.MediaEncoding.Probing
                 Profile = streamInfo.profile,
                 Level = streamInfo.level,
                 Index = streamInfo.index,
-                PixelFormat = streamInfo.pix_fmt
+                PixelFormat = streamInfo.pix_fmt,
+                NalLengthSize = streamInfo.nal_length_size,
+                TimeBase = streamInfo.time_base,
+                CodecTimeBase = streamInfo.codec_time_base
             };
+
+            if (string.Equals(streamInfo.is_avc, "true", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(streamInfo.is_avc, "1", StringComparison.OrdinalIgnoreCase))
+            {
+                stream.IsAVC = true;
+            }
+            else if (string.Equals(streamInfo.is_avc, "false", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(streamInfo.is_avc, "0", StringComparison.OrdinalIgnoreCase))
+            {
+                stream.IsAVC = false;
+            }
 
             // Filter out junk
             if (!string.IsNullOrWhiteSpace(streamInfo.codec_tag_string) && streamInfo.codec_tag_string.IndexOf("[0]", StringComparison.OrdinalIgnoreCase) == -1)
@@ -418,6 +442,7 @@ namespace MediaBrowser.MediaEncoding.Probing
             {
                 stream.Language = GetDictionaryValue(streamInfo.tags, "language");
                 stream.Comment = GetDictionaryValue(streamInfo.tags, "comment");
+                stream.Title = GetDictionaryValue(streamInfo.tags, "title");
             }
 
             if (string.Equals(streamInfo.codec_type, "audio", StringComparison.OrdinalIgnoreCase))
@@ -452,7 +477,7 @@ namespace MediaBrowser.MediaEncoding.Probing
             }
             else if (string.Equals(streamInfo.codec_type, "video", StringComparison.OrdinalIgnoreCase))
             {
-                stream.Type = isAudio || string.Equals(stream.Codec, "mjpeg", StringComparison.OrdinalIgnoreCase) || string.Equals(stream.Codec, "gif", StringComparison.OrdinalIgnoreCase)
+                stream.Type = isAudio || string.Equals(stream.Codec, "mjpeg", StringComparison.OrdinalIgnoreCase) || string.Equals(stream.Codec, "gif", StringComparison.OrdinalIgnoreCase) || string.Equals(stream.Codec, "png", StringComparison.OrdinalIgnoreCase)
                     ? MediaStreamType.EmbeddedImage
                     : MediaStreamType.Video;
 
@@ -526,7 +551,23 @@ namespace MediaBrowser.MediaEncoding.Probing
                 stream.IsForced = string.Equals(isForced, "1", StringComparison.OrdinalIgnoreCase);
             }
 
+            NormalizeStreamTitle(stream);
+
             return stream;
+        }
+
+        private void NormalizeStreamTitle(MediaStream stream)
+        {
+            if (string.Equals(stream.Title, "sdh", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(stream.Title, "cc", StringComparison.OrdinalIgnoreCase))
+            {
+                stream.Title = null;
+            }
+
+            if (stream.Type == MediaStreamType.EmbeddedImage)
+            {
+                stream.Title = null;
+            }
         }
 
         /// <summary>
@@ -753,7 +794,7 @@ namespace MediaBrowser.MediaEncoding.Probing
             if (!string.IsNullOrWhiteSpace(artists))
             {
                 audio.Artists = SplitArtists(artists, new[] { '/', ';' }, false)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .DistinctNames()
                     .ToList();
             }
             else
@@ -766,7 +807,7 @@ namespace MediaBrowser.MediaEncoding.Probing
                 else
                 {
                     audio.Artists = SplitArtists(artist, _nameDelimiters, true)
-                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .DistinctNames()
                         .ToList();
                 }
             }
@@ -788,9 +829,14 @@ namespace MediaBrowser.MediaEncoding.Probing
             else
             {
                 audio.AlbumArtists = SplitArtists(albumArtist, _nameDelimiters, true)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .DistinctNames()
                     .ToList();
 
+            }
+
+            if (audio.AlbumArtists.Count == 0)
+            {
+                audio.AlbumArtists = audio.Artists.Take(1).ToList();
             }
 
             // Track number

@@ -1,5 +1,4 @@
 ﻿using MediaBrowser.Common.Configuration;
-using MediaBrowser.Common.IO;
 using MediaBrowser.Common.ScheduledTasks;
 using MediaBrowser.Model.Logging;
 using System;
@@ -72,7 +71,7 @@ namespace MediaBrowser.Common.Implementations.ScheduledTasks.Tasks
 
             progress.Report(90);
 
-            minDateModified = DateTime.UtcNow.AddDays(-2);
+            minDateModified = DateTime.UtcNow.AddDays(-1);
 
             try
             {

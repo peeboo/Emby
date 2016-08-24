@@ -65,7 +65,7 @@ namespace MediaBrowser.Controller.Channels
                 Name = id,
                 Id = id,
                 ReadAtNativeFramerate = ReadAtNativeFramerate,
-                SupportsDirectStream = Protocol == MediaProtocol.File || Protocol == MediaProtocol.Http,
+                SupportsDirectStream = Protocol == MediaProtocol.File,
                 SupportsDirectPlay = SupportsDirectPlay
             };
 
@@ -83,8 +83,7 @@ namespace MediaBrowser.Controller.Channels
         {
             var list = new List<MediaStream>();
 
-            if (!string.IsNullOrWhiteSpace(info.VideoCodec) &&
-                !string.IsNullOrWhiteSpace(info.AudioCodec))
+            if (!string.IsNullOrWhiteSpace(info.VideoCodec))
             {
                 list.Add(new MediaStream
                 {
@@ -99,7 +98,10 @@ namespace MediaBrowser.Controller.Channels
                     BitRate = info.VideoBitrate,
                     AverageFrameRate = info.Framerate
                 });
+            }
 
+            if (!string.IsNullOrWhiteSpace(info.AudioCodec))
+            {
                 list.Add(new MediaStream
                 {
                     Type = MediaStreamType.Audio,

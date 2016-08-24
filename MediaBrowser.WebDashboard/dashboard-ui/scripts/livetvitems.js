@@ -1,6 +1,4 @@
-﻿define(['jQuery'], function ($) {
-
-    var view = LibraryBrowser.getDefaultItemsView('Poster', 'Poster');
+﻿define(['cardBuilder', 'emby-itemscontainer'], function (cardBuilder) {
 
     var currentDate = new Date();
     currentDate.setHours(0, 0, 0, 0);
@@ -37,47 +35,45 @@
 
             page.querySelector('.listTopPaging').innerHTML = pagingHtml;
 
-            if (view == "Poster") {
-                html = LibraryBrowser.getPosterViewHtml({
-                    items: result.Items,
-                    shape: query.IsMovie ? 'portrait' : "auto",
-                    context: 'livetv',
-                    showTitle: false,
-                    centerText: true,
-                    lazy: true,
-                    showStartDateIndex: true,
-                    overlayText: false,
-                    showProgramAirInfo: true,
-                    overlayMoreButton: true
-                });
-            }
-            else if (view == "PosterCard") {
-                html = LibraryBrowser.getPosterViewHtml({
-                    items: result.Items,
-                    shape: "portrait",
-                    context: 'livetv',
-                    showTitle: true,
-                    showStartDateIndex: true,
-                    lazy: true,
-                    cardLayout: true,
-                    showProgramAirInfo: true,
-                    overlayMoreButton: true
-                });
-            }
+            html = cardBuilder.getCardsHtml({
+                items: result.Items,
+                shape: query.IsMovie ? 'portrait' : "auto",
+                context: 'livetv',
+                showTitle: false,
+                centerText: true,
+                lazy: true,
+                showStartDateIndex: true,
+                overlayText: false,
+                showProgramAirInfo: true,
+                overlayMoreButton: true
+            });
 
             var elem = page.querySelector('.itemsContainer');
             elem.innerHTML = html + pagingHtml;
             ImageLoader.lazyChildren(elem);
 
-            $('.btnNextPage', page).on('click', function () {
+            var i, length;
+            var elems;
+
+            function onNextPageClick() {
                 query.StartIndex += query.Limit;
                 reloadItems(page);
-            });
+            }
 
-            $('.btnPreviousPage', page).on('click', function () {
+            function onPreviousPageClick() {
                 query.StartIndex -= query.Limit;
                 reloadItems(page);
-            });
+            }
+
+            elems = page.querySelectorAll('.btnNextPage');
+            for (i = 0, length = elems.length; i < length; i++) {
+                elems[i].addEventListener('click', onNextPageClick);
+            }
+
+            elems = page.querySelectorAll('.btnPreviousPage');
+            for (i = 0, length = elems.length; i < length; i++) {
+                elems[i].addEventListener('click', onPreviousPageClick);
+            }
 
             LibraryBrowser.saveQueryValues(getSavedQueryKey(), query);
 

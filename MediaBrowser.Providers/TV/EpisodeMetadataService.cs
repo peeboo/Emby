@@ -1,4 +1,4 @@
-﻿using MediaBrowser.Common.IO;
+﻿using System;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
@@ -7,14 +7,54 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Providers.Manager;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using CommonIO;
 
 namespace MediaBrowser.Providers.TV
 {
     public class EpisodeMetadataService : MetadataService<Episode, EpisodeInfo>
     {
-        public EpisodeMetadataService(IServerConfigurationManager serverConfigurationManager, ILogger logger, IProviderManager providerManager, IProviderRepository providerRepo, IFileSystem fileSystem, IUserDataManager userDataManager, ILibraryManager libraryManager) : base(serverConfigurationManager, logger, providerManager, providerRepo, fileSystem, userDataManager, libraryManager)
+        protected override async Task<ItemUpdateType> BeforeSave(Episode item, bool isFullRefresh, ItemUpdateType currentUpdateType)
         {
+            var updateType = await base.BeforeSave(item, isFullRefresh, currentUpdateType).ConfigureAwait(false);
+
+            if (updateType <= ItemUpdateType.None)
+            {
+                if (!string.Equals(item.SeriesName, item.FindSeriesName(), StringComparison.Ordinal))
+                {
+                    updateType |= ItemUpdateType.MetadataImport;
+                }
+            }
+            if (updateType <= ItemUpdateType.None)
+            {
+                if (!string.Equals(item.SeriesSortName, item.FindSeriesSortName(), StringComparison.Ordinal))
+                {
+                    updateType |= ItemUpdateType.MetadataImport;
+                }
+            }
+            if (updateType <= ItemUpdateType.None)
+            {
+                if (!string.Equals(item.SeasonName, item.FindSeasonName(), StringComparison.Ordinal))
+                {
+                    updateType |= ItemUpdateType.MetadataImport;
+                }
+            }
+            if (updateType <= ItemUpdateType.None)
+            {
+                if (item.SeriesId != item.FindSeriesId())
+                {
+                    updateType |= ItemUpdateType.MetadataImport;
+                }
+            }
+            if (updateType <= ItemUpdateType.None)
+            {
+                if (item.SeasonId != item.FindSeasonId())
+                {
+                    updateType |= ItemUpdateType.MetadataImport;
+                }
+            }
+
+            return updateType;
         }
 
         protected override void MergeData(MetadataResult<Episode> source, MetadataResult<Episode> target, List<MetadataFields> lockedFields, bool replaceData, bool mergeMetadataSettings)
@@ -58,6 +98,10 @@ namespace MediaBrowser.Providers.TV
             {
                 targetItem.IndexNumberEnd = sourceItem.IndexNumberEnd;
             }
+        }
+
+        public EpisodeMetadataService(IServerConfigurationManager serverConfigurationManager, ILogger logger, IProviderManager providerManager, IFileSystem fileSystem, IUserDataManager userDataManager, ILibraryManager libraryManager) : base(serverConfigurationManager, logger, providerManager, fileSystem, userDataManager, libraryManager)
+        {
         }
     }
 }

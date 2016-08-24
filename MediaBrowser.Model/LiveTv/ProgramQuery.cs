@@ -14,7 +14,12 @@ namespace MediaBrowser.Model.LiveTv
             ChannelIds = new string[] { };
             SortBy = new string[] { };
             Genres = new string[] { };
+            EnableTotalRecordCount = true;
+            EnableUserData = true;
         }
+
+        public bool EnableTotalRecordCount { get; set; }
+        public bool EnableUserData { get; set; }
 
         /// <summary>
         /// Fields to return within the items, in addition to basic information

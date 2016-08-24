@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace MediaBrowser.Model.Dto
+﻿namespace MediaBrowser.Model.Dto
 {
     /// <summary>
     /// Class LibrarySummary
@@ -27,6 +25,7 @@ namespace MediaBrowser.Model.Dto
         /// </summary>
         /// <value>The game count.</value>
         public int GameCount { get; set; }
+        public int ArtistCount { get; set; }
         /// <summary>
         /// Gets or sets the game system count.
         /// </summary>
@@ -62,5 +61,6 @@ namespace MediaBrowser.Model.Dto
         /// </summary>
         /// <value>The book count.</value>
         public int BookCount { get; set; }
+        public int ItemCount { get; set; }
     }
 }

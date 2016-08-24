@@ -1,7 +1,6 @@
 ﻿using System.IO;
 using System.Threading;
 using CommonIO;
-using MediaBrowser.Common.IO;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.LocalMetadata.Parsers;
@@ -32,7 +31,7 @@ namespace MediaBrowser.LocalMetadata.Providers
             return directoryService.GetFile(Path.Combine(info.Path, "series.xml"));
         }
 
-        public int Order
+        public override int Order
         {
             get
             {

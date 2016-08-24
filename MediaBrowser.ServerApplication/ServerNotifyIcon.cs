@@ -4,14 +4,13 @@ using MediaBrowser.Controller.Localization;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Server.Startup.Common.Browser;
 using System;
+using System.ComponentModel;
 using System.Windows.Forms;
 
 namespace MediaBrowser.ServerApplication
 {
     public class ServerNotifyIcon : IDisposable
     {
-        bool IsDisposing = false;
-
         private NotifyIcon notifyIcon1;
         private ContextMenuStrip contextMenuStrip1;
         private ToolStripMenuItem cmdExit;
@@ -21,23 +20,16 @@ namespace MediaBrowser.ServerApplication
         private ToolStripMenuItem cmdRestart;
         private ToolStripSeparator toolStripSeparator1;
         private ToolStripMenuItem cmdCommunity;
+        private Container components;
 
         private readonly ILogger _logger;
         private readonly IServerApplicationHost _appHost;
         private readonly IServerConfigurationManager _configurationManager;
         private readonly ILocalizationManager _localization;
 
-        public bool Visible
+        public void Invoke(Action action)
         {
-            get
-            {
-                return notifyIcon1.Visible;
-            }
-            set
-            {
-                Action act = () => notifyIcon1.Visible = false;
-                contextMenuStrip1.Invoke(act);
-            }
+            contextMenuStrip1.Invoke(action);
         }
 
         public ServerNotifyIcon(ILogManager logManager,
@@ -50,7 +42,7 @@ namespace MediaBrowser.ServerApplication
             _appHost = appHost;
             _configurationManager = configurationManager;
 
-            var components = new System.ComponentModel.Container();
+            components = new System.ComponentModel.Container();
 
             var resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
             contextMenuStrip1 = new ContextMenuStrip(components);
@@ -133,37 +125,11 @@ namespace MediaBrowser.ServerApplication
             LocalizeText();
 
             notifyIcon1.DoubleClick += notifyIcon1_DoubleClick;
-            Application.ThreadExit += Application_ThreadExit;
-            Application.ApplicationExit += Application_ApplicationExit;
-        }
-
-        void Application_ThreadExit(object sender, EventArgs e)
-        {
-            try
-            {
-                notifyIcon1.Visible = false;
-            }
-            catch
-            {
-
-            }
-        }
-
-        void Application_ApplicationExit(object sender, EventArgs e)
-        {
-            try
-            {
-                notifyIcon1.Visible = false;
-            }
-            catch
-            {
-
-            }
         }
 
         void notifyIcon1_DoubleClick(object sender, EventArgs e)
         {
-            BrowserLauncher.OpenDashboard(_appHost, _logger);
+            BrowserLauncher.OpenDashboard(_appHost);
         }
 
         private void LocalizeText()
@@ -194,17 +160,17 @@ namespace MediaBrowser.ServerApplication
 
         void cmdBrowse_Click(object sender, EventArgs e)
         {
-            BrowserLauncher.OpenWebClient(_appHost, _logger);
+            BrowserLauncher.OpenWebClient(_appHost);
         }
 
         void cmdCommunity_Click(object sender, EventArgs e)
         {
-            BrowserLauncher.OpenCommunity(_logger);
+            BrowserLauncher.OpenCommunity(_appHost);
         }
 
         void cmdConfigure_Click(object sender, EventArgs e)
         {
-            BrowserLauncher.OpenDashboard(_appHost, _logger);
+            BrowserLauncher.OpenDashboard(_appHost);
         }
 
         void cmdRestart_Click(object sender, EventArgs e)
@@ -217,16 +183,26 @@ namespace MediaBrowser.ServerApplication
             _appHost.Shutdown();
         }
 
-        ~ServerNotifyIcon()
-        {
-            Dispose();
-        }
-
         public void Dispose()
         {
-            if (!IsDisposing)
+            Dispose(true);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing)
             {
-                IsDisposing = true;
+                if (notifyIcon1 != null)
+                {
+                    notifyIcon1.Visible = false;
+                    notifyIcon1.Dispose();
+                    notifyIcon1 = null;
+                }
+
+                if (components != null)
+                {
+                    components.Dispose();
+                }
             }
         }
     }

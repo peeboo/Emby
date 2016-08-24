@@ -86,25 +86,12 @@ each error is categorized by :
     - ```Hls.ErrorTypes.MEDIA_ERROR```for media/video related errors
     - ```Hls.ErrorTypes.OTHER_ERROR```for all other errors
   - its details:
-    - ```Hls.ErrorDetails.MANIFEST_LOAD_ERROR```raised when manifest loading fails because of a network error
-    - ```Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT```raised when manifest loading fails because of a timeout
-    - ```Hls.ErrorDetails.MANIFEST_PARSING_ERROR```raised when manifest parsing failed to find proper content
-    - ```Hls.ErrorDetails.LEVEL_LOAD_ERROR```raised when level loading fails because of a network error
-    - ```Hls.ErrorDetails.LEVEL_LOAD_TIMEOUT```raised when level loading fails because of a timeout
-    - ```Hls.ErrorDetails.LEVEL_SWITCH_ERROR```raised when level switching fails
-    - ```Hls.ErrorDetails.FRAG_LOAD_ERROR```raised when fragment loading fails because of a network error
-    - ```Hls.ErrorDetails.FRAG_LOOP_LOADING_ERROR```raised upon detection of same fragment being requested in loop
-    - ```Hls.ErrorDetails.FRAG_LOAD_TIMEOUT```raised when fragment loading fails because of a timeout
-    - ```Hls.ErrorDetails.FRAG_DECRYPT_ERROR```raised when fragment decryption fails
-    - ```Hls.ErrorDetails.FRAG_PARSING_ERROR```raised when fragment parsing fails
-    - ```Hls.ErrorDetails.BUFFER_APPEND_ERROR```raised when exception is raised while preparing buffer append
-    - ```Hls.ErrorDetails.BUFFER_APPENDING_ERROR```raised when exception is raised during buffer appending
-    - ```Hls.ErrorDetails.BUFFER_STALLED_ERROR```raised when playback stalls because the buffer runs out
+    - refer to [Errors details](#Errors)
   - its fatality:
     - ```false```if error is not fatal, hls.js will try to recover it
     - ```true```if error is fatal, an action is required to (try to) recover it.
 
- full details is described [below](##Errors)
+ full details is described [below](#Errors)
 
 
  see sample code below to listen to errors:
@@ -183,6 +170,7 @@ configuration parameters could be provided to hls.js upon instantiation of Hls O
 
    var config = {
       autoStartLoad : true,
+      startPosition : -1,
       capLevelToPlayerSize: false,
       debug : false,
       defaultAudioCodec : undefined,
@@ -191,6 +179,7 @@ configuration parameters could be provided to hls.js upon instantiation of Hls O
       maxBufferSize : 60*1000*1000,
       maxBufferHole : 0.3,
       maxSeekHole : 2,
+      seekHoleNudgeDuration : 0.01,
       maxFragLookUpTolerance : 0.2,
       liveSyncDurationCount : 3,
       liveMaxLatencyDurationCount: 10,
@@ -213,7 +202,14 @@ configuration parameters could be provided to hls.js upon instantiation of Hls O
       xhrSetup : XMLHttpRequestSetupCallback,
       abrController : customAbrController,
       timelineController: TimelineController,
-      enableCEA708Captions: true
+      enableCEA708Captions: true,
+      abrEwmaFastLive: 5.0,
+      abrEwmaSlowLive: 9.0,
+      abrEwmaFastVoD: 4.0,
+      abrEwmaSlowVoD: 15.0,
+      abrEwmaDefaultEstimate: 500000,
+      abrBandWidthFactor: 0.8,
+      abrBandWidthUpFactor: 0.7
     };
 
 
@@ -240,7 +236,14 @@ a logger object could also be provided for custom logging : ```config.debug=cust
 (default true)
 
  - if set to true, start level playlist and first fragments will be loaded automatically, after triggering of ```Hls.Events.MANIFEST_PARSED``` event
- - if set to false, an explicit API call (```hls.startLoad()```) will be needed to start quality level/fragment loading.
+ - if set to false, an explicit API call (```hls.startLoad(startPosition=-1)```) will be needed to start quality level/fragment loading.
+
+#### ```startPosition```
+(default -1)
+
+ - if set to -1, playback will start from initialTime=0 for VoD and according to ```liveSyncDuration/liveSyncDurationCount``` config params for Live
+ - Otherwise, playback will start from predefined value. (unless stated otherwise in ```autoStartLoad=false``` mode : in that case startPosition can be overrided using ```hls.startLoad(startPosition)```).
+
 
 #### ```defaultAudioCodec```
 (default undefined)
@@ -275,6 +278,13 @@ This could result in small overlapping or hole in media buffer. This tolerance f
 in case playback is stalled, and a buffered range is available upfront, less than maxSeekHole seconds from current media position,
 hls.js will jump over this buffer hole to reach the beginning of this following buffered range.
 ```maxSeekHole``` allows to configure this jumpable threshold.
+
+
+#### ```seekHoleNudgeDuration```
+(default 0.01s)
+
+ in case playback is still stalling although a seek over buffer hole just occured, hls.js will seek to next buffer start + (nb of consecutive stalls * seekHoleNudgeDuration to try to restore playback
+
 
 #### ```maxFragLookUpTolerance```
 (default 0.2s)
@@ -479,6 +489,62 @@ whether or not to enable CEA-708 captions
 
 parameter should be a boolean
 
+#### ```abrEwmaFastLive```
+(default : 5.0)
+
+Fast bitrate Exponential moving average half-life, used to compute average bitrate for Live streams.
+Half of the estimate is based on the last abrEwmaFastLive seconds of sample history.
+Each of the sample is weighted by the fragment loading duration.
+
+parameter should be a float greater than 0
+
+#### ```abrEwmaSlowLive```
+(default : 9.0)
+
+Slow bitrate Exponential moving average half-life, used to compute average bitrate for Live streams.
+Half of the estimate is based on the last abrEwmaSlowLive seconds of sample history.
+Each of the sample is weighted by the fragment loading duration.
+
+parameter should be a float greater than abrEwmaFastLive
+
+#### ```abrEwmaFastVoD```
+(default : 4.0)
+
+Fast bitrate Exponential moving average half-life, used to compute average bitrate for VoD streams.
+Half of the estimate is based on the last abrEwmaFastVoD seconds of sample history.
+Each of the sample is weighted by the fragment loading duration.
+
+parameter should be a float greater than 0
+
+#### ```abrEwmaSlowVoD```
+(default : 15.0)
+
+Slow bitrate Exponential moving average half-life, used to compute average bitrate for VoD streams.
+Half of the estimate is based on the last abrEwmaSlowVoD seconds of sample history.
+Each of the sample is weighted by the fragment loading duration.
+
+parameter should be a float greater than abrEwmaFastVoD
+
+#### ```abrEwmaDefaultEstimate```
+(default : 500000)
+
+Default bandwidth estimate in bits/second prior to collecting fragment bandwidth samples.
+
+parameter should be a float
+
+
+#### ```abrBandWidthFactor```
+(default : 0.8)
+
+Scale factor to be applied against measured bandwidth average, to determine whether we can stay on current or lower quality level.
+If ```abrBandWidthFactor * bandwidth average < level.bitrate``` then ABR can switch to that level providing that it is equal or less than current level.
+
+#### ```abrBandWidthUpFactor```
+(default : 0.7)
+
+Scale factor to be applied against measured bandwidth average, to determine whether  we can switch up to a higher quality level.
+If ```abrBandWidthUpFactor * bandwidth average < level.bitrate``` then ABR can switch up to that quality level.
+
 ## Video Binding/Unbinding API
 
 #### ```hls.attachMedia(videoElement)```
@@ -558,8 +624,11 @@ by default, hls.js will automatically start loading quality level playlists, and
 
 however if ```config.autoStartLoad``` is set to ```false```, the following method needs to be called to manually start playlist and fragments loading:
 
-#### ```hls.startLoad()```
+#### ```hls.startLoad(startPosition=-1)```
 start/restart playlist/fragment loading. this is only effective if MANIFEST_PARSED event has been triggered and video element has been attached to hls object.
+
+startPosition is the initial position in the playlist.
+if startPosition is not set to -1, it allows to override default startPosition to the one you want (it will bypass hls.config.liveSync* config params for Live for example, so that user can start playback from whatever position)
 
 #### ```hls.stopLoad()```
 stop playlist/fragment loading. could be resumed later on by calling ```hls.startLoad()```
@@ -670,7 +739,7 @@ full list of Errors is described below:
   - ```Hls.ErrorDetails.BUFFER_FULL_ERROR```raised when no data can be appended anymore in media buffer because it is full. this error is recovered automatically by performing a smooth level switching that empty buffers (without disrupting the playback) and reducing the max buffer length.
     - data: { type : ```MEDIA_ERROR```, details : ```Hls.ErrorDetails.BUFFER_FULL_ERROR```, fatal : ```false```}
   - ```Hls.ErrorDetails.BUFFER_SEEK_OVER_HOLE```raised after hls.js seeks over a buffer hole to unstuck the playback, 
-    - data: { type : ```MEDIA_ERROR```, details : ```Hls.ErrorDetails.BUFFER_SEEK_OVER_HOLE```, fatal : ```false```}
+    - data: { type : ```MEDIA_ERROR```, details : ```Hls.ErrorDetails.BUFFER_SEEK_OVER_HOLE```, fatal : ```false```, hole : hole duration}
 
 ## Objects
 ### Level
@@ -702,6 +771,8 @@ url is an array, that might contains several items if failover/redundant streams
 
 level detailed infos contains level details retrieved after level playlist parsing, they are specified below :
 
+* protocol version
+* playlist type
 * start sequence number
 * end sequence number
 * level total duration
@@ -713,6 +784,8 @@ see sample object below, available after corresponding LEVEL_LOADED event has be
 
 ```js
 {
+  version: 3,
+  type: 'VOD', // null if EXT-X-PLAYLIST-TYPE not present
   startSN: 0,
   endSN: 50,
   totalduration: 510,

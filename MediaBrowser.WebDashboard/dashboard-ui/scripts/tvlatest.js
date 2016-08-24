@@ -1,11 +1,11 @@
-﻿define([], function () {
+﻿define(['components/categorysyncbuttons', 'components/groupedcards', 'cardBuilder'], function (categorysyncbuttons, groupedcards, cardBuilder) {
 
     function getView() {
 
         return 'Thumb';
     }
 
-    function loadLatest(context, params) {
+    function getLatestPromise(context, params) {
 
         Dashboard.showLoadingMsg();
 
@@ -13,37 +13,35 @@
 
         var parentId = params.topParentId;
 
-        var limit = 30;
-
-        if (AppInfo.hasLowImageBandwidth) {
-            limit = 16;
-        }
-
         var options = {
 
             IncludeItemTypes: "Episode",
-            Limit: limit,
-            Fields: "PrimaryImageAspectRatio,SyncInfo",
+            Limit: 30,
+            Fields: "PrimaryImageAspectRatio,BasicSyncInfo",
             ParentId: parentId,
             ImageTypeLimit: 1,
-            EnableImageTypes: "Primary,Backdrop,Banner,Thumb"
+            EnableImageTypes: "Primary,Backdrop,Thumb"
         };
 
-        ApiClient.getJSON(ApiClient.getUrl('Users/' + userId + '/Items/Latest', options)).then(function (items) {
+        return ApiClient.getJSON(ApiClient.getUrl('Users/' + userId + '/Items/Latest', options));
+    }
+
+    function loadLatest(context, params, promise) {
+
+        promise.then(function (items) {
 
             var view = getView();
             var html = '';
 
             if (view == 'ThumbCard') {
 
-                html += LibraryBrowser.getPosterViewHtml({
+                html += cardBuilder.getCardsHtml({
                     items: items,
                     shape: "backdrop",
                     preferThumb: true,
                     inheritThumb: false,
                     showUnplayedIndicator: false,
                     showChildCountIndicator: true,
-                    overlayText: false,
                     showParentTitle: true,
                     lazy: true,
                     showTitle: true,
@@ -52,7 +50,7 @@
 
             } else if (view == 'Thumb') {
 
-                html += LibraryBrowser.getPosterViewHtml({
+                html += cardBuilder.getCardsHtml({
                     items: items,
                     shape: "backdrop",
                     preferThumb: true,
@@ -60,7 +58,6 @@
                     showParentTitle: false,
                     showUnplayedIndicator: false,
                     showChildCountIndicator: true,
-                    overlayText: false,
                     centerText: true,
                     lazy: true,
                     showTitle: false,
@@ -79,9 +76,17 @@
 
         var self = this;
 
-        self.renderTab = function() {
+        categorysyncbuttons.init(tabContent);        var latestPromise;
 
-            loadLatest(tabContent, params);
+        self.preRender = function () {
+            latestPromise = getLatestPromise(view, params);
         };
+
+        self.renderTab = function () {
+
+            loadLatest(tabContent, params, latestPromise);
+        };
+
+        tabContent.querySelector('#latestEpisodes').addEventListener('click', groupedcards.onItemsContainerClick);
     };
 });

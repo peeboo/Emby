@@ -1,7 +1,6 @@
-﻿define(['dialogHelper', 'jQuery', 'css!css/metadataeditor.css', 'paper-fab'], function (dialogHelper, $) {
+﻿define(['dialogHelper', 'css!css/metadataeditor.css', 'emby-button', 'paper-icon-button-light'], function (dialogHelper) {
 
     var currentItem;
-    var currentDeferred;
     var hasChanges = false;
 
     function getBaseRemoteOptions() {
@@ -27,17 +26,30 @@
         }
     }
 
+    function addListeners(elems, eventName, fn) {
+
+        for (var i = 0, length = elems.length; i < length; i++) {
+
+            elems[i].addEventListener(eventName, fn);
+        }
+    }
+
     function reloadItem(page, item) {
 
         currentItem = item;
 
         ApiClient.getRemoteImageProviders(getBaseRemoteOptions()).then(function (providers) {
 
-            if (providers.length) {
-                $('.btnBrowseAllImages', page).removeClass('hide');
-            } else {
-                $('.btnBrowseAllImages', page).addClass('hide');
+            var btnBrowseAllImages = page.querySelectorAll('.btnBrowseAllImages');
+            for (var i = 0, length = btnBrowseAllImages.length; i < length; i++) {
+
+                if (providers.length) {
+                    btnBrowseAllImages[i].classList.remove('hide');
+                } else {
+                    btnBrowseAllImages[i].classList.add('hide');
+                }
             }
+
 
             ApiClient.getItemImageInfos(currentItem.Id).then(function (imageInfos) {
 
@@ -47,6 +59,27 @@
                 Dashboard.hideLoadingMsg();
             });
         });
+    }
+
+    function getImageUrl(item, type, index, options) {
+
+        options = options || {};
+        options.type = type;
+        options.index = index;
+
+        if (type == 'Backdrop') {
+            options.tag = item.BackdropImageTags[index];
+        } else if (type == 'Screenshot') {
+            options.tag = item.ScreenshotImageTags[index];
+        } else if (type == 'Primary') {
+            options.tag = item.PrimaryImageTag || item.ImageTags[type];
+        } else {
+            options.tag = item.ImageTags[type];
+        }
+
+        // For search hints
+        return ApiClient.getScaledImageUrl(item.Id || item.ItemId, options);
+
     }
 
     function renderImages(page, item, images, imageProviders, elem) {
@@ -62,7 +95,7 @@
 
             var height = 150;
 
-            html += '<div style="height:' + height + 'px;vertical-align:top;background-repeat:no-repeat;background-position:center bottom;background-size:contain;" class="lazy" data-src="' + LibraryBrowser.getImageUrl(currentItem, image.ImageType, image.ImageIndex, { height: height }) + '"></div>';
+            html += '<div style="height:' + height + 'px;vertical-align:top;background-repeat:no-repeat;background-position:center bottom;background-size:contain;" class="lazy" data-src="' + getImageUrl(currentItem, image.ImageType, image.ImageIndex, { height: height }) + '"></div>';
 
             html += '<div class="editorTileFooter">';
 
@@ -81,24 +114,24 @@
             if (image.ImageType == "Backdrop" || image.ImageType == "Screenshot") {
 
                 if (i > 0) {
-                    html += '<paper-icon-button class="btnMoveImage" icon="chevron-left" data-imagetype="' + image.ImageType + '" data-index="' + image.ImageIndex + '" data-newindex="' + (image.ImageIndex - 1) + '" title="' + Globalize.translate('ButtonMoveLeft') + '"></paper-icon-button>';
+                    html += '<button is="paper-icon-button-light" class="btnMoveImage autoSize" data-imagetype="' + image.ImageType + '" data-index="' + image.ImageIndex + '" data-newindex="' + (image.ImageIndex - 1) + '" title="' + Globalize.translate('ButtonMoveLeft') + '"><i class="md-icon">chevron_left</i></button>';
                 } else {
-                    html += '<paper-icon-button icon="chevron-left" disabled title="' + Globalize.translate('ButtonMoveLeft') + '"></paper-icon-button>';
+                    html += '<button is="paper-icon-button-light" class="autoSize" disabled title="' + Globalize.translate('ButtonMoveLeft') + '"><i class="md-icon">chevron_left</i></button>';
                 }
 
                 if (i < length - 1) {
-                    html += '<paper-icon-button class="btnMoveImage" icon="chevron-right" data-imagetype="' + image.ImageType + '" data-index="' + image.ImageIndex + '" data-newindex="' + (image.ImageIndex + 1) + '" title="' + Globalize.translate('ButtonMoveRight') + '"></paper-icon-button>';
+                    html += '<button is="paper-icon-button-light" class="btnMoveImage autoSize" data-imagetype="' + image.ImageType + '" data-index="' + image.ImageIndex + '" data-newindex="' + (image.ImageIndex + 1) + '" title="' + Globalize.translate('ButtonMoveRight') + '"><i class="md-icon">chevron_right</i></button>';
                 } else {
-                    html += '<paper-icon-button icon="chevron-right" disabled title="' + Globalize.translate('ButtonMoveRight') + '"></paper-icon-button>';
+                    html += '<button is="paper-icon-button-light" class="autoSize" disabled title="' + Globalize.translate('ButtonMoveRight') + '"><i class="md-icon">chevron_right</i></button>';
                 }
             }
             else {
                 if (imageProviders.length) {
-                    html += '<paper-icon-button icon="search" data-imagetype="' + image.ImageType + '" class="btnSearchImages" title="' + Globalize.translate('ButtonBrowseOnlineImages') + '"></paper-icon-button>';
+                    html += '<button is="paper-icon-button-light" data-imagetype="' + image.ImageType + '" class="btnSearchImages autoSize" title="' + Globalize.translate('ButtonBrowseOnlineImages') + '"><i class="md-icon">search</i></button>';
                 }
             }
 
-            html += '<paper-icon-button icon="delete" data-imagetype="' + image.ImageType + '" data-index="' + (image.ImageIndex != null ? image.ImageIndex : "null") + '" class="btnDeleteImage" title="' + Globalize.translate('Delete') + '"></paper-icon-button>';
+            html += '<button is="paper-icon-button-light" data-imagetype="' + image.ImageType + '" data-index="' + (image.ImageIndex != null ? image.ImageIndex : "null") + '" class="btnDeleteImage autoSize" title="' + Globalize.translate('Delete') + '"><i class="md-icon">delete</i></button>';
 
             html += '</div>';
 
@@ -110,12 +143,11 @@
         elem.innerHTML = html;
         ImageLoader.lazyChildren(elem);
 
-        $('.btnSearchImages', elem).on('click', function () {
+        addListeners(elem.querySelectorAll('.btnSearchImages'), 'click', function () {
             showImageDownloader(page, this.getAttribute('data-imagetype'));
         });
 
-        $('.btnDeleteImage', elem).on('click', function () {
-
+        addListeners(elem.querySelectorAll('.btnDeleteImage'), 'click', function () {
             var type = this.getAttribute('data-imagetype');
             var index = this.getAttribute('data-index');
             index = index == "null" ? null : parseInt(index);
@@ -134,7 +166,7 @@
             });
         });
 
-        $('.btnMoveImage', elem).on('click', function () {
+        addListeners(elem.querySelectorAll('.btnMoveImage'), 'click', function () {
             var type = this.getAttribute('data-imagetype');
             var index = parseInt(this.getAttribute('data-index'));
             var newIndex = parseInt(this.getAttribute('data-newindex'));
@@ -166,10 +198,10 @@
         });
 
         if (images.length) {
-            $('#backdropsContainer', page).show();
+            page.querySelector('#backdropsContainer', page).classList.remove('hide');
             renderImages(page, item, images, imageProviders, page.querySelector('#backdrops'));
         } else {
-            $('#backdropsContainer', page).hide();
+            page.querySelector('#backdropsContainer', page).classList.add('hide');
         }
     }
 
@@ -183,30 +215,27 @@
         });
 
         if (images.length) {
-            $('#screenshotsContainer', page).show();
-            renderImages(page, item, images, imageProviders, $('#screenshots', page));
+            page.querySelector('#screenshotsContainer', page).classList.remove('hide');
+            renderImages(page, item, images, imageProviders, page.querySelector('#screenshots'));
         } else {
-            $('#screenshotsContainer', page).hide();
+            page.querySelector('#screenshotsContainer', page).classList.add('hide');
         }
     }
 
     function showImageDownloader(page, imageType) {
         require(['components/imagedownloader/imagedownloader'], function (ImageDownloader) {
 
-            ImageDownloader.show(currentItem.Id, currentItem.Type, imageType).then(function (hasChanged) {
+            ImageDownloader.show(currentItem.Id, currentItem.Type, imageType).then(function () {
 
-                if (hasChanged) {
-                    hasChanges = true;
-                    reload(page);
-                }
+                hasChanges = true;
+                reload(page);
             });
         });
     }
 
     function initEditor(page, options) {
 
-        $('.btnOpenUploadMenu', page).on('click', function () {
-
+        addListeners(page.querySelectorAll('.btnOpenUploadMenu'), 'click', function () {
             var imageType = this.getAttribute('data-imagetype');
 
             require(['components/imageuploader/imageuploader'], function (imageUploader) {
@@ -226,12 +255,12 @@
             });
         });
 
-        $('.btnBrowseAllImages', page).on('click', function () {
+        addListeners(page.querySelectorAll('.btnBrowseAllImages'), 'click', function () {
             showImageDownloader(page, this.getAttribute('data-imagetype') || 'Primary');
         });
     }
 
-    function showEditor(itemId, options) {
+    function showEditor(itemId, options, resolve, reject) {
 
         options = options || {};
 
@@ -246,22 +275,22 @@
             ApiClient.getItem(Dashboard.getCurrentUserId(), itemId).then(function (item) {
 
                 var dlg = dialogHelper.createDialog({
-                    size: 'fullscreen-border'
+                    size: 'fullscreen-border',
+                    removeOnClose: true
                 });
 
                 var theme = options.theme || 'b';
 
                 dlg.classList.add('ui-body-' + theme);
                 dlg.classList.add('background-theme-' + theme);
-                dlg.classList.add('popupEditor');
 
                 var html = '';
                 html += '<h2 class="dialogHeader">';
-                html += '<paper-fab icon="arrow-back" mini class="btnCloseDialog" tabindex="-1"></paper-fab>';
+                html += '<button type="button" is="emby-button" icon="arrow-back" class="fab mini btnCloseDialog autoSize" tabindex="-1"><i class="md-icon">&#xE5C4;</i></button>';
                 html += '<div style="display:inline-block;margin-left:.6em;vertical-align:middle;">' + item.Name + '</div>';
                 html += '</h2>';
 
-                html += '<div class="editorContent">';
+                html += '<div class="editorContent" style="padding:0 1em;">';
                 html += Globalize.translateDocument(template);
                 html += '</div>';
 
@@ -271,14 +300,23 @@
                 initEditor(dlg, options);
 
                 // Has to be assigned a z-index after the call to .open() 
-                $(dlg).on('close', onDialogClosed);
+                dlg.addEventListener('close', function () {
+
+                    Dashboard.hideLoadingMsg();
+
+                    if (hasChanges) {
+                        resolve();
+                    } else {
+                        reject();
+                    }
+                });
 
                 dialogHelper.open(dlg);
 
                 var editorContent = dlg.querySelector('.editorContent');
                 reload(editorContent, item);
 
-                $('.btnCloseDialog', dlg).on('click', function () {
+                dlg.querySelector('.btnCloseDialog').addEventListener('click', function () {
 
                     dialogHelper.close(dlg);
                 });
@@ -288,23 +326,15 @@
         xhr.send();
     }
 
-    function onDialogClosed() {
-
-        $(this).remove();
-        Dashboard.hideLoadingMsg();
-        currentDeferred.resolveWith(null, [hasChanges]);
-    }
-
     return {
         show: function (itemId, options) {
 
-            var deferred = jQuery.Deferred();
+            return new Promise(function (resolve, reject) {
 
-            currentDeferred = deferred;
-            hasChanges = false;
+                hasChanges = false;
 
-            showEditor(itemId, options);
-            return deferred.promise();
+                showEditor(itemId, options, resolve, reject);
+            });
         }
     };
 });

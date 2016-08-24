@@ -1,23 +1,26 @@
-﻿define(['dialogHelper', 'paper-checkbox', 'paper-input', 'paper-button'], function (dialogHelper) {
+﻿define(['dialogHelper', 'paper-checkbox', 'paper-input', 'emby-button', 'paper-icon-button-light'], function (dialogHelper) {
 
     var extractedName;
     var extractedYear;
     var currentNewItem;
     var existingSeriesHtml;
+    var seriesLocationsCount = 0;
 
     function onApiFailure(e) {
 
         Dashboard.hideLoadingMsg();
 
-        Dashboard.alert({
-            title: Globalize.translate('AutoOrganizeError'),
-            message: Globalize.translate('ErrorOrganizingFileWithErrorCode', e.getResponseHeader("X-Application-Error-Code"))
+        require(['alert'], function (alert) {
+            alert({
+                title: Globalize.translate('AutoOrganizeError'),
+                text: Globalize.translate('ErrorOrganizingFileWithErrorCode', e.headers.get("X-Application-Error-Code"))
+            });
         });
     }
 
     function initEpisodeForm(context, item) {
 
-        if (!item.ExtractedName || item.ExtractedName.length < 4) {
+        if (!item.ExtractedName || item.ExtractedName.length < 3) {
             context.querySelector('.fldRemember').classList.add('hide');
         }
         else {
@@ -29,7 +32,7 @@
         context.querySelector('#txtSeason').value = item.ExtractedSeasonNumber;
         context.querySelector('#txtEpisode').value = item.ExtractedEpisodeNumber;
         context.querySelector('#txtEndingEpisode').value = item.ExtractedEndingEpisodeNumber;
-        //context.querySelector('.extractedName').value = item.ExtractedName;
+        //context.querySelector('.extractedName').innerHTML = item.ExtractedName;
 
         extractedName = item.ExtractedName;
         extractedYear = item.ExtractedYear;
@@ -78,6 +81,8 @@
                         }
                     }
                 }
+
+                seriesLocationsCount = seriesLocations.length;
 
                 var seriesFolderHtml = seriesLocations.map(function (s) {
                     return '<option value="' + s.value + '">' + s.display + '</option>';
@@ -140,9 +145,20 @@
 
     function showNewSeriesDialog(dlg) {
 
-        require(['components/itemidentifier/itemidentifier'], function (itemidentifier) {
+        if (seriesLocationsCount == 0) {
 
-            itemidentifier.showFindNew(extractedName, extractedYear, 'Series').then(function (newItem) {
+            require(['alert'], function (alert) {
+                alert({
+                    title: Globalize.translate('AutoOrganizeError'),
+                    text: Globalize.translate('NoTvFoldersConfigured')
+                });
+            });
+            return;
+        }
+
+        require(['itemIdentifier'], function (itemIdentifier) {
+
+            itemIdentifier.showFindNew(extractedName, extractedYear, 'Series', ApiClient.serverId()).then(function (newItem) {
 
                 if (newItem != null) {
                     currentNewItem = newItem;
@@ -200,7 +216,7 @@
                     dlg.innerHTML = html;
                     document.body.appendChild(dlg);
 
-                    dlg.querySelector('.dialogHeaderTitle').innerHTML = Globalize.translate('FileOrganizeManually');
+                    dlg.querySelector('.formDialogHeaderTitle').innerHTML = Globalize.translate('FileOrganizeManually');
 
                     dialogHelper.open(dlg);
 

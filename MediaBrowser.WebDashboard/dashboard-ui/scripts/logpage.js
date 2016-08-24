@@ -1,11 +1,20 @@
-﻿define(['jQuery'], function ($) {
+﻿define(['datetime', 'listViewStyle'], function (datetime) {
 
-    $(document).on('pagebeforeshow', "#logPage", function () {
+    return function (view, params) {
 
-        var page = this;
-        Dashboard.showLoadingMsg();
+        view.querySelector('#chkDebugLog').addEventListener('change', function () {
 
-        require(['paper-fab', 'paper-item-body', 'paper-icon-item'], function () {
+            ApiClient.getServerConfiguration().then(function (config) {
+
+                config.EnableDebugLevelLogging = view.querySelector('#chkDebugLog').checked;
+
+                ApiClient.updateServerConfiguration(config);
+            });
+        });
+
+        view.addEventListener('viewbeforeshow', function () {
+
+            Dashboard.showLoadingMsg();
 
             var apiClient = ApiClient;
 
@@ -24,29 +33,29 @@
                     logUrl += "&api_key=" + apiClient.accessToken();
 
                     var logHtml = '';
-                    logHtml += '<paper-icon-item>';
+                    logHtml += '<div class="listItem">';
 
                     logHtml += '<a item-icon class="clearLink" href="' + logUrl + '" target="_blank">';
-                    logHtml += '<paper-fab mini icon="schedule" class="blue" item-icon></paper-fab>';
+                    logHtml += '<i class="md-icon listItemIcon">schedule</i>';
                     logHtml += "</a>";
 
-                    logHtml += '<paper-item-body two-line>';
+                    logHtml += '<div class="listItemBody two-line">';
                     logHtml += '<a class="clearLink" href="' + logUrl + '" target="_blank">';
 
-                    logHtml += "<div>" + log.Name + "</div>";
+                    logHtml += "<h3 class='listItemBodyText'>" + log.Name + "</h3>";
 
-                    var date = parseISO8601Date(log.DateModified, { toLocal: true });
+                    var date = datetime.parseISO8601Date(log.DateModified, true);
 
                     var text = date.toLocaleDateString();
 
-                    text += ' ' + LibraryBrowser.getDisplayTime(date);
+                    text += ' ' + datetime.getDisplayTime(date);
 
-                    logHtml += '<div secondary>' + text + '</div>';
+                    logHtml += '<div class="listItemBodyText secondary">' + text + '</div>';
 
                     logHtml += "</a>";
-                    logHtml += '</paper-item-body>';
+                    logHtml += '</div>';
 
-                    logHtml += '</paper-icon-item>';
+                    logHtml += '</div>';
 
                     return logHtml;
 
@@ -55,11 +64,15 @@
 
                 html += '</div>';
 
-                $('.serverLogs', page).html(html);
+                view.querySelector('.serverLogs').innerHTML = html;
                 Dashboard.hideLoadingMsg();
+            });
 
+            apiClient.getServerConfiguration().then(function (config) {
+
+                view.querySelector('#chkDebugLog').checked = config.EnableDebugLevelLogging;
             });
         });
-    });
 
+    };
 });

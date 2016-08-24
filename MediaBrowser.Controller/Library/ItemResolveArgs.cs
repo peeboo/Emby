@@ -5,7 +5,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using CommonIO;
-using MediaBrowser.Common.IO;
+using MediaBrowser.Controller.Configuration;
+using MediaBrowser.Model.Configuration;
 
 namespace MediaBrowser.Controller.Library
 {
@@ -50,6 +51,13 @@ namespace MediaBrowser.Controller.Library
 
                 return dict.Values;
             }
+        }
+
+        public LibraryOptions LibraryOptions { get; set; }
+
+        public LibraryOptions GetLibraryOptions()
+        {
+            return LibraryOptions ?? (LibraryOptions = (Parent == null ? new LibraryOptions() : BaseItem.LibraryManager.GetLibraryOptions(Parent)));
         }
 
         /// <summary>
@@ -118,8 +126,8 @@ namespace MediaBrowser.Controller.Library
 
                 var parentDir = System.IO.Path.GetDirectoryName(Path) ?? string.Empty;
 
-                return (parentDir.Length > _appPaths.RootFolderPath.Length
-                    && parentDir.StartsWith(_appPaths.RootFolderPath, StringComparison.OrdinalIgnoreCase));
+                return parentDir.Length > _appPaths.RootFolderPath.Length
+                       && parentDir.StartsWith(_appPaths.RootFolderPath, StringComparison.OrdinalIgnoreCase);
 
             }
         }
@@ -280,7 +288,7 @@ namespace MediaBrowser.Controller.Library
         /// <returns><c>true</c> if the specified <see cref="System.Object" /> is equal to this instance; otherwise, <c>false</c>.</returns>
         public override bool Equals(object obj)
         {
-            return (Equals(obj as ItemResolveArgs));
+            return Equals(obj as ItemResolveArgs);
         }
 
         /// <summary>

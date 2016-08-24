@@ -126,14 +126,14 @@ namespace MediaBrowser.Server.Implementations.Library.Resolvers
             }
             else
             {
-                var videoInfo = parser.ResolveFile(args.Path);
+                var videoInfo = parser.Resolve(args.Path, false, false);
 
                 if (videoInfo == null)
                 {
                     return null;
                 }
 
-                if (LibraryManager.IsVideoFile(args.Path) || videoInfo.IsStub)
+                if (LibraryManager.IsVideoFile(args.Path, args.GetLibraryOptions()) || videoInfo.IsStub)
                 {
                     var path = args.Path;
 

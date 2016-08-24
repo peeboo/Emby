@@ -1,5 +1,4 @@
-﻿using MediaBrowser.Common.IO;
-using MediaBrowser.Controller;
+﻿using MediaBrowser.Controller;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Resolvers;
@@ -51,7 +50,8 @@ namespace MediaBrowser.Server.Implementations.Library.Resolvers
                 {
                     return new CollectionFolder
                     {
-                        CollectionType = GetCollectionType(args)
+                        CollectionType = GetCollectionType(args),
+                        PhysicalLocationsList = args.PhysicalLocations.ToList()
                     };
                 }
             }

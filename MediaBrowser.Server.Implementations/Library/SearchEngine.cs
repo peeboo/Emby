@@ -87,12 +87,15 @@ namespace MediaBrowser.Server.Implementations.Library
         {
             var searchTerm = query.SearchTerm;
 
+            if (searchTerm != null)
+            {
+                searchTerm = searchTerm.Trim().RemoveDiacritics();
+            }
+
             if (string.IsNullOrWhiteSpace(searchTerm))
             {
                 throw new ArgumentNullException("searchTerm");
             }
-
-            searchTerm = searchTerm.RemoveDiacritics();
 
             var terms = GetWords(searchTerm);
 
@@ -119,7 +122,7 @@ namespace MediaBrowser.Server.Implementations.Library
                 AddIfMissing(excludeItemTypes, typeof(MusicGenre).Name);
             }
 
-            if (query.IncludePeople && (includeItemTypes.Count == 0 || includeItemTypes.Contains("People", StringComparer.OrdinalIgnoreCase)))
+            if (query.IncludePeople && (includeItemTypes.Count == 0 || includeItemTypes.Contains("People", StringComparer.OrdinalIgnoreCase) || includeItemTypes.Contains("Person", StringComparer.OrdinalIgnoreCase)))
             {
                 if (!query.IncludeMedia)
                 {
@@ -163,12 +166,12 @@ namespace MediaBrowser.Server.Implementations.Library
                 ExcludeItemTypes = excludeItemTypes.ToArray(),
                 IncludeItemTypes = includeItemTypes.ToArray(),
                 Limit = query.Limit,
-                IncludeItemsByName = true
-
-            }, new string[] { });
+                IncludeItemsByName = true,
+                IsVirtualItem = false
+            });
 
             // Add search hints based on item name
-            hints.AddRange(mediaItems.Where(IncludeInSearch).Select(item =>
+            hints.AddRange(mediaItems.Select(item =>
             {
                 var index = GetIndex(item.Name, searchTerm, terms);
 
@@ -182,20 +185,6 @@ namespace MediaBrowser.Server.Implementations.Library
             });
 
             return Task.FromResult(returnValue);
-        }
-
-        private bool IncludeInSearch(BaseItem item)
-        {
-            var episode = item as Episode;
-
-            if (episode != null)
-            {
-                if (episode.IsMissingEpisode)
-                {
-                    return false;
-                }
-            }
-            return true;
         }
 
         /// <summary>

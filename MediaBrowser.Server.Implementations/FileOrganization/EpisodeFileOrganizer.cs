@@ -1,5 +1,4 @@
-﻿using MediaBrowser.Common.IO;
-using MediaBrowser.Controller.Configuration;
+﻿using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.FileOrganization;
 using MediaBrowser.Controller.Library;
@@ -44,13 +43,6 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
             _providerManager = providerManager;
         }
 
-        public Task<FileOrganizationResult> OrganizeEpisodeFile(string path, CancellationToken cancellationToken)
-        {
-            var options = _config.GetAutoOrganizeOptions();
-
-            return OrganizeEpisodeFile(path, options, false, cancellationToken);
-        }
-
         public async Task<FileOrganizationResult> OrganizeEpisodeFile(string path, AutoOrganizeOptions options, bool overwriteExisting, CancellationToken cancellationToken)
         {
             _logger.Info("Sorting file {0}", path);
@@ -64,6 +56,8 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
                 FileSize = new FileInfo(path).Length
             };
 
+            try
+            { 
             if (_libraryMonitor.IsPathLocked(path))
             {
                 result.Status = FileSortingStatus.Failure;
@@ -117,7 +111,7 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
                         premiereDate,
                         options,
                         overwriteExisting,
-						false,
+                        false,
                         result,
                         cancellationToken).ConfigureAwait(false);
                 }
@@ -149,6 +143,12 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
             }
 
             await _organizationService.SaveResult(result, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                result.Status = FileSortingStatus.Failure;
+                result.StatusMessage = ex.Message;
+            }
 
             return result;
         }
@@ -157,6 +157,8 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
         {
             var result = _organizationService.GetResult(request.ResultId);
 
+            try
+            { 
             Series series = null;
 
             if (request.NewSeriesProviderIds.Count > 0)
@@ -203,11 +205,17 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
                 null,
                 options,
                 true,
-				request.RememberCorrection,
+                request.RememberCorrection,
                 result,
                 cancellationToken).ConfigureAwait(false);
 
             await _organizationService.SaveResult(result, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                result.Status = FileSortingStatus.Failure;
+                result.StatusMessage = ex.Message;
+            }
 
             return result;
         }
@@ -220,7 +228,7 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
             DateTime? premiereDate,
             AutoOrganizeOptions options,
             bool overwriteExisting,
-			bool rememberCorrection,
+            bool rememberCorrection,
             FileOrganizationResult result,
             CancellationToken cancellationToken)
         {
@@ -243,7 +251,7 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
                 premiereDate,
                 options,
                 overwriteExisting,
-				rememberCorrection,
+                rememberCorrection,
                 result,
                 cancellationToken);
         }
@@ -256,7 +264,7 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
             DateTime? premiereDate,
             AutoOrganizeOptions options,
             bool overwriteExisting,
-			bool rememberCorrection,
+            bool rememberCorrection,
             FileOrganizationResult result,
             CancellationToken cancellationToken)
         {
@@ -264,16 +272,15 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
 
             var originalExtractedSeriesString = result.ExtractedName;
 
+            try
+            {
             // Proceed to sort the file
             var newPath = await GetNewPath(sourcePath, series, seasonNumber, episodeNumber, endingEpiosdeNumber, premiereDate, options.TvOptions, cancellationToken).ConfigureAwait(false);
 
             if (string.IsNullOrEmpty(newPath))
             {
                 var msg = string.Format("Unable to sort {0} because target path could not be determined.", sourcePath);
-                result.Status = FileSortingStatus.Failure;
-                result.StatusMessage = msg;
-                _logger.Warn(msg);
-                return;
+                throw new Exception(msg);
             }
 
             _logger.Info("Sorting file {0} to new path {1}", sourcePath, newPath);
@@ -305,7 +312,7 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
 
                 if (otherDuplicatePaths.Count > 0)
                 {
-                    var msg = string.Format("File '{0}' already exists as '{1}', stopping organization", sourcePath, otherDuplicatePaths);
+                    var msg = string.Format("File '{0}' already exists as these:'{1}'. Stopping organization", sourcePath, string.Join("', '", otherDuplicatePaths));
                     _logger.Info(msg);
                     result.Status = FileSortingStatus.SkippedExisting;
                     result.StatusMessage = msg;
@@ -348,6 +355,14 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
                     }
                 }
             }
+            }
+            catch (Exception ex)
+            {
+                result.Status = FileSortingStatus.Failure;
+                result.StatusMessage = ex.Message;
+                _logger.Warn(ex.Message);
+                return;
+            }
 
             if (rememberCorrection)
             {
@@ -357,6 +372,11 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
 
         private void SaveSmartMatchString(string matchString, Series series, AutoOrganizeOptions options)
         {
+            if (string.IsNullOrEmpty(matchString) || matchString.Length < 3)
+            {
+                return;
+            }
+
             SmartMatchInfo info = options.SmartMatchInfos.FirstOrDefault(i => string.Equals(i.ItemName, series.Name, StringComparison.OrdinalIgnoreCase));
 
             if (info == null)
@@ -501,7 +521,7 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
             }
             catch (Exception ex)
             {
-                var errorMsg = string.Format("Failed to move file from {0} to {1}", result.OriginalPath, result.TargetPath);
+                var errorMsg = string.Format("Failed to move file from {0} to {1}: {2}", result.OriginalPath, result.TargetPath, ex.Message);
 
                 result.Status = FileSortingStatus.Failure;
                 result.StatusMessage = errorMsg;
@@ -537,7 +557,11 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
             result.ExtractedName = nameWithoutYear;
             result.ExtractedYear = yearInName;
 
-            var series = _libraryManager.RootFolder.GetRecursiveChildren(i => i is Series)
+            var series = _libraryManager.GetItemList(new Controller.Entities.InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { typeof(Series).Name },
+                Recursive = true
+            })
                 .Cast<Series>()
                 .Select(i => NameUtils.GetMatchScore(nameWithoutYear, yearInName, i))
                 .Where(i => i.Item2 > 0)
@@ -551,10 +575,13 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
 
                 if (info != null)
                 {
-                    series = _libraryManager.RootFolder
-                        .GetRecursiveChildren(i => i is Series)
-                        .Cast<Series>()
-                        .FirstOrDefault(i => string.Equals(i.Name, info.ItemName, StringComparison.OrdinalIgnoreCase));
+                    series = _libraryManager.GetItemList(new Controller.Entities.InternalItemsQuery
+                    {
+                        IncludeItemTypes = new[] { typeof(Series).Name },
+                        Recursive = true,
+                        Name = info.ItemName
+
+                    }).Cast<Series>().FirstOrDefault();
                 }
             }
 
@@ -605,7 +632,7 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
             {
                 var msg = string.Format("No provider metadata found for {0} season {1} episode {2}", series.Name, seasonNumber, episodeNumber);
                 _logger.Warn(msg);
-                return null;
+                throw new Exception(msg);
             }
 
             var episodeName = episode.Name;
@@ -704,6 +731,11 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
 
             var pattern = endingEpisodeNumber.HasValue ? options.MultiEpisodeNamePattern : options.EpisodeNamePattern;
 
+            if (string.IsNullOrWhiteSpace(pattern))
+            {
+                throw new Exception("GetEpisodeFileName: Configured episode name pattern is empty!");
+            }
+
             var result = pattern.Replace("%sn", seriesName)
                 .Replace("%s.n", seriesName.Replace(" ", "."))
                 .Replace("%s_n", seriesName.Replace(" ", "_"))
@@ -748,8 +780,7 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
                 // There may be cases where reducing the title length may still not be sufficient to
                 // stay below maxLength
                 var msg = string.Format("Unable to generate an episode file name shorter than {0} characters to constrain to the max path limit", maxLength);
-                _logger.Warn(msg);
-                return string.Empty;
+                throw new Exception(msg);
             }
 
             return result;

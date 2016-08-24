@@ -46,8 +46,10 @@
                     return a.guid == i.Id;
                 })[0];
 
-                return catalogEntry && catalogEntry.category == category;
-
+                if (catalogEntry) {
+                    return catalogEntry.category == category;
+                }
+                return false;
             });
 
             PluginsPage.renderPlugins(page, installedPlugins);
@@ -80,8 +82,6 @@
 
         var context = getParameterByName('context');
 
-        $('.sectionTabs', page).hide();
-
         if (context == 'sync') {
             Dashboard.setPageTitle(Globalize.translate('TitleSync'));
             page.setAttribute('data-helpurl', 'https://github.com/MediaBrowser/Wiki/wiki/Sync');
@@ -94,9 +94,6 @@
             Dashboard.setPageTitle(Globalize.translate('TitleNotifications'));
             page.setAttribute('data-helpurl', 'https://github.com/MediaBrowser/Wiki/wiki/Notifications');
         }
-
-        $('.sectionTabs', page).hide();
-        $('.' + context + 'SectionTabs', page).show();
 
     }).on('pageshow', "#appServicesPage", function () {
 

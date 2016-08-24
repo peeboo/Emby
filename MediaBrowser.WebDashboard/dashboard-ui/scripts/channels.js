@@ -1,4 +1,4 @@
-﻿define(['jQuery'], function ($) {
+﻿define(['libraryBrowser', 'cardBuilder', 'emby-itemscontainer', 'emby-tabs', 'emby-button', 'scripts/channelslatest', 'scripts/sections'], function (libraryBrowser, cardBuilder) {
 
     // The base query options
     var query = {
@@ -23,7 +23,7 @@
 
             if (view == "Thumb") {
 
-                html = LibraryBrowser.getPosterViewHtml({
+                html = cardBuilder.getCardsHtml({
                     items: result.Items,
                     shape: "backdrop",
                     context: 'channels',
@@ -36,7 +36,7 @@
             }
             else if (view == "ThumbCard") {
 
-                html = LibraryBrowser.getPosterViewHtml({
+                html = cardBuilder.getCardsHtml({
                     items: result.Items,
                     shape: "backdrop",
                     preferThumb: true,
@@ -51,7 +51,7 @@
             elem.innerHTML = html;
             ImageLoader.lazyChildren(elem);
 
-            LibraryBrowser.saveQueryValues('channels', query);
+            libraryBrowser.saveQueryValues('channels', query);
 
             Dashboard.hideLoadingMsg();
         });
@@ -62,7 +62,7 @@
         switch (index) {
 
             case 1:
-                LibraryBrowser.loadSavedQueryValues('channels', query);
+                libraryBrowser.loadSavedQueryValues('channels', query);
                 reloadItems(page);
                 break;
             default:
@@ -70,19 +70,29 @@
         }
     }
 
-    pageIdOn('pageinit', "channelsPage", function () {
+    return function (view, params) {
 
-        var page = this;
+        var self = this;
+        var viewTabs = view.querySelector('.libraryViewNav');
 
-        var tabs = page.querySelector('paper-tabs');
-        var pageTabsContainer = page.querySelector('.pageTabsContainer');
+        libraryBrowser.configurePaperLibraryTabs(view, viewTabs, view.querySelectorAll('.pageTabContent'), [0, 1]);
 
-        LibraryBrowser.configurePaperLibraryTabs(page, tabs, pageTabsContainer, 'channels.html');
-
-        pageTabsContainer.addEventListener('tabchange', function (e) {
-            loadTab(page, parseInt(e.detail.selectedTabIndex));
+        viewTabs.addEventListener('tabchange', function (e) {
+            loadTab(view, parseInt(e.detail.selectedTabIndex));
         });
 
-    });
+        if (AppInfo.enableHeadRoom) {
+            require(["headroom-window"], function (headroom) {
+                headroom.add(viewTabs);
+                self.headroom = headroom;
+            });
+        }
 
+        view.addEventListener('viewdestroy', function (e) {
+
+            if (self.headroom) {
+                self.headroom.remove(viewTabs);
+            }
+        });
+    };
 });

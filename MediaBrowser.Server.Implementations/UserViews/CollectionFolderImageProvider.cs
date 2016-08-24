@@ -1,5 +1,4 @@
 ﻿using MediaBrowser.Common.Configuration;
-using MediaBrowser.Common.IO;
 using MediaBrowser.Controller.Drawing;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
@@ -54,11 +53,6 @@ namespace MediaBrowser.Server.Implementations.UserViews
                     if (series != null)
                     {
                         return series;
-                    }
-                    var episodeSeason = episode.Season;
-                    if (episodeSeason != null)
-                    {
-                        return episodeSeason;
                     }
 
                     return episode;

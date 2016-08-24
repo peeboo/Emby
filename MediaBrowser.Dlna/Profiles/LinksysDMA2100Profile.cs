@@ -1,5 +1,4 @@
 ﻿using System.Xml.Serialization;
-using MediaBrowser.Controller.Dlna;
 using MediaBrowser.Model.Dlna;
 
 namespace MediaBrowser.Dlna.Profiles
@@ -31,6 +30,8 @@ namespace MediaBrowser.Dlna.Profiles
                     Type = DlnaProfileType.Video
                 }
             };
+
+            ResponseProfiles = new ResponseProfile[] { };
         }
     }
 }

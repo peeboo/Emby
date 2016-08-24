@@ -1,7 +1,6 @@
 ﻿using MediaBrowser.Api.Movies;
 using MediaBrowser.Api.Music;
 using MediaBrowser.Controller.Activity;
-using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
@@ -14,13 +13,11 @@ using MediaBrowser.Controller.Net;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.TV;
 using MediaBrowser.Model.Activity;
-using MediaBrowser.Model.Channels;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using ServiceStack;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -28,7 +25,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonIO;
-using MediaBrowser.Common.IO;
 
 namespace MediaBrowser.Api.Library
 {
@@ -354,7 +350,8 @@ namespace MediaBrowser.Api.Library
                     Fields = request.Fields,
                     Id = request.Id,
                     Limit = request.Limit,
-                    UserId = request.UserId
+                    UserId = request.UserId,
+                    ExcludeArtistIds = request.ExcludeArtistIds
                 });
             }
             if (item is MusicArtist)
@@ -497,7 +494,7 @@ namespace MediaBrowser.Api.Library
             }
         }
 
-        public object Get(GetDownload request)
+        public Task<object> Get(GetDownload request)
         {
             var item = _libraryManager.GetItemById(request.Id);
             var auth = _authContext.GetAuthorizationInfo(Request);
@@ -556,7 +553,7 @@ namespace MediaBrowser.Api.Library
             }
         }
 
-        public object Get(GetFile request)
+        public Task<object> Get(GetFile request)
         {
             var item = _libraryManager.GetItemById(request.Id);
             var locationType = item.LocationType;
@@ -569,7 +566,7 @@ namespace MediaBrowser.Api.Library
                 throw new ArgumentException("This command cannot be used for directories.");
             }
 
-            return ToStaticFileResult(item.Path);
+            return ResultFactory.GetStaticFileResult(Request, item.Path);
         }
 
         /// <summary>
@@ -843,6 +840,7 @@ namespace MediaBrowser.Api.Library
             var dtoOptions = GetDtoOptions(request);
 
             var dtos = GetThemeSongIds(item).Select(_libraryManager.GetItemById)
+                            .Where(i => i != null)
                             .OrderBy(i => i.SortName)
                             .Select(i => _dtoService.GetBaseItemDto(i, dtoOptions, user, item));
 
@@ -886,6 +884,7 @@ namespace MediaBrowser.Api.Library
             var dtoOptions = GetDtoOptions(request);
 
             var dtos = GetThemeVideoIds(item).Select(_libraryManager.GetItemById)
+                            .Where(i => i != null)
                             .OrderBy(i => i.SortName)
                             .Select(i => _dtoService.GetBaseItemDto(i, dtoOptions, user, item));
 

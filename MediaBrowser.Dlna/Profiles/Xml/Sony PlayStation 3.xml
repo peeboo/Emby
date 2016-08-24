@@ -8,10 +8,9 @@
       <HttpHeaderInfo name="X-AV-Client-Info" value="PLAYSTATION 3" match="Substring" />
     </Headers>
   </Identification>
-  <FriendlyName>Emby</FriendlyName>
   <Manufacturer>Emby</Manufacturer>
   <ManufacturerUrl>http://emby.media/</ManufacturerUrl>
-  <ModelName>Emby</ModelName>
+  <ModelName>Emby Server</ModelName>
   <ModelDescription>Emby</ModelDescription>
   <ModelNumber>Emby</ModelNumber>
   <ModelUrl>http://emby.media/</ModelUrl>
@@ -24,8 +23,8 @@
   <MaxAlbumArtHeight>480</MaxAlbumArtHeight>
   <MaxIconWidth>48</MaxIconWidth>
   <MaxIconHeight>48</MaxIconHeight>
-  <MaxStreamingBitrate>15000000</MaxStreamingBitrate>
-  <MaxStaticBitrate>15000000</MaxStaticBitrate>
+  <MaxStreamingBitrate>20000000</MaxStreamingBitrate>
+  <MaxStaticBitrate>20000000</MaxStaticBitrate>
   <MusicStreamingTranscodingBitrate>192000</MusicStreamingTranscodingBitrate>
   <MusicSyncBitrate>192000</MusicSyncBitrate>
   <XDlnaDoc>DMS-1.50</XDlnaDoc>
@@ -46,9 +45,9 @@
     <DirectPlayProfile container="jpeg,png,gif,bmp,tiff" type="Photo" />
   </DirectPlayProfiles>
   <TranscodingProfiles>
-    <TranscodingProfile container="mp3" type="Audio" audioCodec="mp3" estimateContentLength="false" enableMpegtsM2TsMode="false" transcodeSeekInfo="Auto" copyTimestamps="false" context="Streaming" />
-    <TranscodingProfile container="ts" type="Video" videoCodec="h264" audioCodec="ac3,aac,mp3" estimateContentLength="false" enableMpegtsM2TsMode="false" transcodeSeekInfo="Auto" copyTimestamps="false" context="Streaming" />
-    <TranscodingProfile container="jpeg" type="Photo" estimateContentLength="false" enableMpegtsM2TsMode="false" transcodeSeekInfo="Auto" copyTimestamps="false" context="Streaming" />
+    <TranscodingProfile container="mp3" type="Audio" audioCodec="mp3" estimateContentLength="false" enableMpegtsM2TsMode="false" transcodeSeekInfo="Auto" copyTimestamps="false" context="Streaming" forceLiveStream="false" enableSubtitlesInManifest="false" />
+    <TranscodingProfile container="ts" type="Video" videoCodec="h264" audioCodec="ac3,aac,mp3" estimateContentLength="false" enableMpegtsM2TsMode="false" transcodeSeekInfo="Auto" copyTimestamps="false" context="Streaming" forceLiveStream="false" enableSubtitlesInManifest="false" />
+    <TranscodingProfile container="jpeg" type="Photo" estimateContentLength="false" enableMpegtsM2TsMode="false" transcodeSeekInfo="Auto" copyTimestamps="false" context="Streaming" forceLiveStream="false" enableSubtitlesInManifest="false" />
   </TranscodingProfiles>
   <ContainerProfiles>
     <ContainerProfile type="Photo">
@@ -67,22 +66,26 @@
         <ProfileCondition condition="LessThanEqual" property="VideoBitrate" value="15360000" isRequired="false" />
         <ProfileCondition condition="LessThanEqual" property="VideoLevel" value="41" isRequired="false" />
       </Conditions>
+      <ApplyConditions />
     </CodecProfile>
     <CodecProfile type="VideoAudio" codec="ac3">
       <Conditions>
         <ProfileCondition condition="LessThanEqual" property="AudioChannels" value="6" isRequired="false" />
         <ProfileCondition condition="LessThanEqual" property="AudioBitrate" value="640000" isRequired="false" />
       </Conditions>
+      <ApplyConditions />
     </CodecProfile>
     <CodecProfile type="VideoAudio" codec="wmapro">
       <Conditions>
         <ProfileCondition condition="LessThanEqual" property="AudioChannels" value="2" isRequired="true" />
       </Conditions>
+      <ApplyConditions />
     </CodecProfile>
     <CodecProfile type="VideoAudio" codec="aac">
       <Conditions>
         <ProfileCondition condition="NotEquals" property="AudioProfile" value="he-aac" isRequired="false" />
       </Conditions>
+      <ApplyConditions />
     </CodecProfile>
   </CodecProfiles>
   <ResponseProfiles>

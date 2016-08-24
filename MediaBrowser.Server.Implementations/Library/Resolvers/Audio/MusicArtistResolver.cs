@@ -1,7 +1,4 @@
-﻿using MediaBrowser.Common.IO;
-using MediaBrowser.Controller.Entities.Audio;
-using MediaBrowser.Controller.Entities.Movies;
-using MediaBrowser.Controller.Entities.TV;
+﻿using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Resolvers;
 using MediaBrowser.Model.Entities;
@@ -75,7 +72,7 @@ namespace MediaBrowser.Server.Implementations.Library.Resolvers.Audio
             var albumResolver = new MusicAlbumResolver(_logger, _fileSystem, _libraryManager);
 
             // If we contain an album assume we are an artist folder
-            return args.FileSystemChildren.Where(i => (i.Attributes & FileAttributes.Directory) == FileAttributes.Directory).Any(i => albumResolver.IsMusicAlbum(i.FullName, directoryService)) ? new MusicArtist() : null;
+            return args.FileSystemChildren.Where(i => (i.Attributes & FileAttributes.Directory) == FileAttributes.Directory).Any(i => albumResolver.IsMusicAlbum(i.FullName, directoryService, args.GetLibraryOptions())) ? new MusicArtist() : null;
         }
 
     }

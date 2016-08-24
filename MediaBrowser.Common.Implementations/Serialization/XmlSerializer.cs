@@ -1,10 +1,11 @@
 ﻿using MediaBrowser.Model.Serialization;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Xml;
 using CommonIO;
-using MediaBrowser.Common.IO;
+using MediaBrowser.Model.Logging;
 
 namespace MediaBrowser.Common.Implementations.Serialization
 {
@@ -13,22 +14,33 @@ namespace MediaBrowser.Common.Implementations.Serialization
     /// </summary>
     public class XmlSerializer : IXmlSerializer
     {
-		private IFileSystem _fileSystem;
+		private readonly IFileSystem _fileSystem;
+        private readonly ILogger _logger;
 
-		public XmlSerializer(IFileSystem fileSystem) 
-		{
-			_fileSystem = fileSystem;
-		}
+        public XmlSerializer(IFileSystem fileSystem, ILogger logger)
+        {
+            _fileSystem = fileSystem;
+            _logger = logger;
+        }
 
         // Need to cache these
         // http://dotnetcodebox.blogspot.com/2013/01/xmlserializer-class-may-result-in.html
-        private readonly ConcurrentDictionary<string, System.Xml.Serialization.XmlSerializer> _serializers =
-            new ConcurrentDictionary<string, System.Xml.Serialization.XmlSerializer>();
+        private readonly Dictionary<string, System.Xml.Serialization.XmlSerializer> _serializers =
+            new Dictionary<string, System.Xml.Serialization.XmlSerializer>();
 
         private System.Xml.Serialization.XmlSerializer GetSerializer(Type type)
         {
             var key = type.FullName;
-            return _serializers.GetOrAdd(key, k => new System.Xml.Serialization.XmlSerializer(type));
+            lock (_serializers)
+            {
+                System.Xml.Serialization.XmlSerializer serializer;
+                if (!_serializers.TryGetValue(key, out serializer))
+                {
+                    serializer = new System.Xml.Serialization.XmlSerializer(type);
+                    _serializers[key] = serializer;
+                }
+                return serializer;
+            }
         }
 
         /// <summary>
@@ -78,6 +90,7 @@ namespace MediaBrowser.Common.Implementations.Serialization
         /// <param name="file">The file.</param>
         public void SerializeToFile(object obj, string file)
         {
+            _logger.Debug("Serializing to file {0}", file);
             using (var stream = new FileStream(file, FileMode.Create))
             {
                 SerializeToStream(obj, stream);
@@ -92,6 +105,7 @@ namespace MediaBrowser.Common.Implementations.Serialization
         /// <returns>System.Object.</returns>
         public object DeserializeFromFile(Type type, string file)
         {
+            _logger.Debug("Deserializing file {0}", file);
             using (var stream = _fileSystem.OpenRead(file))
             {
                 return DeserializeFromStream(type, stream);

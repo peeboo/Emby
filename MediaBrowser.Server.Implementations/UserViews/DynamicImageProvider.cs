@@ -1,5 +1,4 @@
 ﻿using MediaBrowser.Common.Configuration;
-using MediaBrowser.Common.IO;
 using MediaBrowser.Controller.Drawing;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
@@ -70,10 +69,10 @@ namespace MediaBrowser.Server.Implementations.UserViews
 
             var result = await view.GetItems(new InternalItemsQuery
             {
-                User = (view.UserId.HasValue ? _userManager.GetUserById(view.UserId.Value) : null),
+                User = view.UserId.HasValue ? _userManager.GetUserById(view.UserId.Value) : null,
                 CollapseBoxSetItems = false,
                 Recursive = recursive,
-                ExcludeItemTypes = new[] { "UserView", "CollectionFolder" }
+                ExcludeItemTypes = new[] { "UserView", "CollectionFolder", "Person" },
 
             }).ConfigureAwait(false);
 
@@ -86,11 +85,6 @@ namespace MediaBrowser.Server.Implementations.UserViews
                     if (series != null)
                     {
                         return series;
-                    }
-                    var episodeSeason = episode.Season;
-                    if (episodeSeason != null)
-                    {
-                        return episodeSeason;
                     }
 
                     return episode;
@@ -135,7 +129,7 @@ namespace MediaBrowser.Server.Implementations.UserViews
             var view = item as UserView;
             if (view != null)
             {
-                return (IsUsingCollectionStrip(view));
+                return IsUsingCollectionStrip(view);
             }
 
             return false;
@@ -154,7 +148,8 @@ namespace MediaBrowser.Server.Implementations.UserViews
                 CollectionType.HomeVideos,
                 CollectionType.BoxSets,
                 CollectionType.Playlists,
-                CollectionType.Photos
+                CollectionType.Photos,
+                string.Empty
             };
 
             return collectionStripViewTypes.Contains(view.ViewType ?? string.Empty);

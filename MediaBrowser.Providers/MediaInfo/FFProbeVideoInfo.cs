@@ -1,8 +1,6 @@
 ﻿using DvdLib.Ifo;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Model.Dlna;
-using MediaBrowser.Model.Extensions;
-using MediaBrowser.Common.IO;
 using MediaBrowser.Controller.Chapters;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities;
@@ -233,6 +231,8 @@ namespace MediaBrowser.Providers.MediaInfo
             video.HasSubtitles = mediaStreams.Any(i => i.Type == MediaStreamType.Subtitle);
             video.Timestamp = mediaInfo.Timestamp;
 
+            video.Video3DFormat = video.Video3DFormat ?? mediaInfo.Video3DFormat;
+
             await _itemRepo.SaveMediaStreams(video.Id, mediaStreams, cancellationToken).ConfigureAwait(false);
 
             if (options.MetadataRefreshMode == MetadataRefreshMode.FullRefresh ||
@@ -446,7 +446,11 @@ namespace MediaBrowser.Providers.MediaInfo
             {
                 if (string.IsNullOrWhiteSpace(video.Name) || string.Equals(video.Name, Path.GetFileNameWithoutExtension(video.Path), StringComparison.OrdinalIgnoreCase))
                 {
-                    video.Name = data.Name;
+                    // Don't use the embedded name for extras because it will often be the same name as the movie
+                    if (!video.ExtraType.HasValue && !video.IsOwnedItem)
+                    {
+                        video.Name = data.Name;
+                    }
                 }
             }
 
@@ -534,6 +538,7 @@ namespace MediaBrowser.Providers.MediaInfo
                     currentStreams.Concat(externalSubtitleStreams).ToList(),
                     subtitleOptions.SkipIfEmbeddedSubtitlesPresent,
                     subtitleOptions.SkipIfAudioTrackMatches,
+                    subtitleOptions.RequirePerfectMatch,
                     subtitleOptions.DownloadLanguages,
                     cancellationToken).ConfigureAwait(false);
 

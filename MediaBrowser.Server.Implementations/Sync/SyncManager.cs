@@ -1,17 +1,14 @@
 ﻿using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Events;
 using MediaBrowser.Common.Extensions;
-using MediaBrowser.Common.IO;
 using MediaBrowser.Common.ScheduledTasks;
 using MediaBrowser.Controller;
-using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Drawing;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Sync;
@@ -155,7 +152,7 @@ namespace MediaBrowser.Server.Implementations.Sync
                 UserId = request.UserId,
                 UnwatchedOnly = request.UnwatchedOnly,
                 ItemLimit = request.ItemLimit,
-                RequestedItemIds = request.ItemIds ?? new List<string> { },
+                RequestedItemIds = request.ItemIds ?? new List<string>(),
                 DateCreated = DateTime.UtcNow,
                 DateLastModified = DateTime.UtcNow,
                 SyncNewContent = request.SyncNewContent,
@@ -486,7 +483,7 @@ namespace MediaBrowser.Server.Implementations.Sync
 
         private string GetSyncProviderId(ISyncProvider provider)
         {
-            return (provider.GetType().Name).GetMD5().ToString("N");
+            return provider.GetType().Name.GetMD5().ToString("N");
         }
 
         public bool SupportsSync(BaseItem item)
@@ -649,6 +646,7 @@ namespace MediaBrowser.Server.Implementations.Sync
             dtoOptions.Fields.Remove(ItemFields.SeriesGenres);
             dtoOptions.Fields.Remove(ItemFields.Settings);
             dtoOptions.Fields.Remove(ItemFields.SyncInfo);
+            dtoOptions.Fields.Remove(ItemFields.BasicSyncInfo);
 
             syncedItem.Item = _dtoService().GetBaseItemDto(libraryItem, dtoOptions);
 
@@ -690,7 +688,7 @@ namespace MediaBrowser.Server.Implementations.Sync
         private Task ReportOfflinePlayedItem(UserAction action)
         {
             var item = _libraryManager.GetItemById(action.ItemId);
-            var userData = _userDataManager.GetUserData(new Guid(action.UserId), item.GetUserDataKey());
+            var userData = _userDataManager.GetUserData(action.UserId, item);
 
             userData.LastPlayedDate = action.Date;
             _userDataManager.UpdatePlayState(item, userData, action.PositionTicks);
@@ -777,6 +775,13 @@ namespace MediaBrowser.Server.Implementations.Sync
                             _logger.Info("Adding ItemIdsToRemove {0} because it has been marked played.", jobItem.ItemId);
                             removeFromDevice = true;
                         }
+                    }
+                    else if (libraryItem != null && libraryItem.DateModified.Ticks != jobItem.ItemDateModifiedTicks && jobItem.ItemDateModifiedTicks > 0)
+                    {
+                        _logger.Info("Setting status to Queued for {0} because the media has been modified since the original sync.", jobItem.ItemId);
+                        jobItem.Status = SyncJobItemStatus.Queued;
+                        jobItem.Progress = 0;
+                        requiresSaving = true;
                     }
                 }
                 else
@@ -883,6 +888,13 @@ namespace MediaBrowser.Server.Implementations.Sync
                             _logger.Info("Adding ItemIdsToRemove {0} because it has been marked played.", jobItem.Id);
                             removeFromDevice = true;
                         }
+                    }
+                    else if (libraryItem != null && libraryItem.DateModified.Ticks != jobItem.ItemDateModifiedTicks && jobItem.ItemDateModifiedTicks > 0)
+                    {
+                        _logger.Info("Setting status to Queued for {0} because the media has been modified since the original sync.", jobItem.ItemId);
+                        jobItem.Status = SyncJobItemStatus.Queued;
+                        jobItem.Progress = 0;
+                        requiresSaving = true;
                     }
                 }
                 else
@@ -1112,7 +1124,7 @@ namespace MediaBrowser.Server.Implementations.Sync
             await processor.UpdateJobStatus(jobItem.JobId).ConfigureAwait(false);
         }
 
-        public QueryResult<SyncedItemProgress> GetSyncedItemProgresses(SyncJobItemQuery query)
+        public Dictionary<string, SyncedItemProgress> GetSyncedItemProgresses(SyncJobItemQuery query)
         {
             return _repo.GetSyncedItemProgresses(query);
         }
@@ -1129,7 +1141,7 @@ namespace MediaBrowser.Server.Implementations.Sync
             return options;
         }
 
-        public ISyncProvider GetSyncProvider(SyncJobItem jobItem, SyncJob job)
+        public ISyncProvider GetSyncProvider(SyncJobItem jobItem)
         {
             foreach (var provider in _providers)
             {
@@ -1326,9 +1338,9 @@ namespace MediaBrowser.Server.Implementations.Sync
             return list;
         }
 
-        protected internal void OnConversionComplete(SyncJobItem item, SyncJob job)
+        protected internal void OnConversionComplete(SyncJobItem item)
         {
-            var syncProvider = GetSyncProvider(item, job);
+            var syncProvider = GetSyncProvider(item);
             if (syncProvider is AppSyncProvider)
             {
                 return;

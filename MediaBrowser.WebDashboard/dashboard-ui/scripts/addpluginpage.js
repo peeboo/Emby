@@ -64,7 +64,7 @@
 
             if (positive && positive.length > 0) {
 
-                html += '<div data-role="collapsible" data-collapsed="true" style="margin-top: 2em;" >';
+                html += '<div style="margin-top: 2em;" >';
                 html += '<h3>' + Globalize.translate('HeaderLatestReviews') + '</h3>';
 
                 html += "<div><br/>";
@@ -73,9 +73,12 @@
                     var review = positive[i];
 
                     html += "<div>";
-                    html += "<span class='storeItemReviewText'>";
+                    html += "<span class='storeItemReviewText' style='display:inline-flex;align-items:center;'>";
                     html += new Date(review.timestamp).toDateString();
-                    html += " " + RatingHelpers.getStoreRatingHtml(review.rating, review.id, review.name, true);
+                    if (review.rating) {
+                        html += '<i class="md-icon" style="color:#cc3333;height:auto;width:auto;margin-left:.5em;">star</i>';
+                        html += review.rating.toFixed(1);
+                    }
                     html += " " + review.title;
                     html += "</span>";
                     if (review.review) {
@@ -92,6 +95,99 @@
             }
 
             $('#latestReviews', page).html(html).trigger('create');
+        });
+    }
+
+    function renderPluginInfo(page, pkg, pluginSecurityInfo) {
+
+        if (AppInfo.isNativeApp) {
+            return;
+        }
+
+        require(['jQuery'], function ($) {
+            if (pkg.isPremium) {
+                $('.premiumPackage', page).show();
+
+                // Fill in registration info
+                var regStatus = "";
+                if (pkg.isRegistered) {
+
+                    regStatus += "<p style='color:green;'>";
+
+                    regStatus += Globalize.translate('MessageFeatureIncludedWithSupporter');
+
+                } else {
+
+                    var expDateTime = new Date(pkg.expDate).getTime();
+                    var nowTime = new Date().getTime();
+
+                    if (expDateTime <= nowTime) {
+                        regStatus += "<p style='color:red;'>";
+                        regStatus += Globalize.translate('MessageTrialExpired');
+                    } else if (expDateTime > new Date(1970, 1, 1).getTime()) {
+
+                        regStatus += "<p style='color:blue;'>";
+                        regStatus += Globalize.translate('MessageTrialWillExpireIn').replace('{0}', Math.round(expDateTime - nowTime) / (86400000));
+                    }
+                }
+
+                regStatus += "</p>";
+                $('#regStatus', page).html(regStatus);
+
+                if (pluginSecurityInfo.IsMBSupporter) {
+                    $('#regInfo', page).html(pkg.regInfo || "");
+
+                    $('.premiumDescription', page).hide();
+                    $('.supporterDescription', page).hide();
+
+                    if (pkg.price > 0) {
+
+                        $('.premiumHasPrice', page).show();
+                        $('#featureId', page).val(pkg.featureId);
+                        $('#featureName', page).val(pkg.name);
+                        $('#amount', page).val(pkg.price);
+
+                        $('#regPrice', page).html("<h3>" + Globalize.translate('ValuePriceUSD').replace('{0}', "$" + pkg.price.toFixed(2)) + "</h3>");
+                        $('#ppButton', page).hide();
+
+                        var url = "https://mb3admin.com/admin/service/user/getPayPalEmail?id=" + pkg.owner;
+
+                        fetch(url).then(function (response) {
+
+                            return response.json();
+
+                        }).then(function (dev) {
+
+                            if (dev.payPalEmail) {
+                                $('#payPalEmail', page).val(dev.payPalEmail);
+                                $('#ppButton', page).show();
+
+                            }
+                        });
+
+                    } else {
+                        // Supporter-only feature
+                        $('.premiumHasPrice', page).hide();
+                    }
+                } else {
+
+                    if (pkg.price) {
+                        $('.premiumDescription', page).show();
+                        $('.supporterDescription', page).hide();
+                        $('#regInfo', page).html("");
+
+                    } else {
+                        $('.premiumDescription', page).hide();
+                        $('.supporterDescription', page).show();
+                        $('#regInfo', page).html("");
+                    }
+
+                    $('#ppButton', page).hide();
+                }
+
+            } else {
+                $('.premiumPackage', page).hide();
+            }
         });
     }
 
@@ -130,11 +226,15 @@
 
         $('#developer', page).html(pkg.owner);
 
-        RegistrationServices.renderPluginInfo(page, pkg, pluginSecurityInfo);
+        renderPluginInfo(page, pkg, pluginSecurityInfo);
 
         //Ratings and Reviews
-        var ratingHtml = RatingHelpers.getStoreRatingHtml(pkg.avgRating, pkg.id, pkg.name);
-        ratingHtml += "<span class='storeReviewCount'>";
+        var ratingHtml = '';
+        if (pkg.avgRating) {
+            ratingHtml += '<i class="md-icon" style="color:#cc3333;height:auto;width:auto;">star</i>';
+            ratingHtml += pkg.avgRating.toFixed(1);
+        }
+        ratingHtml += "<span>";
         ratingHtml += " " + Globalize.translate('ValueReviewCount').replace('{0}', pkg.totalRatings);
         ratingHtml += "</span>";
 
@@ -199,20 +299,13 @@
 
         var context = getParameterByName('context');
 
-        $('.syncTabs', page).hide();
-        $('.pluginTabs', page).hide();
-        $('.livetvTabs', page).hide();
         $('.notificationsTabs', page).hide();
 
         if (context == 'sync') {
-            $('.syncTabs', page).show();
-
             page.setAttribute('data-helpurl', 'https://github.com/MediaBrowser/Wiki/wiki/Sync');
             Dashboard.setPageTitle(Globalize.translate('TitleSync'));
         }
         else if (context == 'livetv') {
-
-            $('.livetvTabs', page).show();
 
             Dashboard.setPageTitle(Globalize.translate('TitleLiveTV'));
             page.setAttribute('data-helpurl', 'https://github.com/MediaBrowser/Wiki/wiki/Live%20TV');
@@ -225,8 +318,6 @@
             page.setAttribute('data-helpurl', 'https://github.com/MediaBrowser/Wiki/wiki/Notifications');
         }
         else {
-            $('.pluginTabs', page).show();
-
             page.setAttribute('data-helpurl', 'https://github.com/MediaBrowser/Wiki/wiki/Plugins');
             Dashboard.setPageTitle(Globalize.translate('TitlePlugins'));
         }
@@ -242,6 +333,8 @@
             if (confirmed) {
 
                 Dashboard.showLoadingMsg();
+
+                page.querySelector('#btnInstall').disabled = true;
 
                 ApiClient.installPlugin(packageName, guid, updateClass, version).then(function () {
 
@@ -285,8 +378,6 @@
             Dashboard.showLoadingMsg();
 
             var page = $(this).parents('#addPluginPage')[0];
-
-            page.querySelector('#btnInstall').disabled = true;
 
             var name = getParameterByName('name');
             var guid = getParameterByName('guid');

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using MediaBrowser.Model.Extensions;
 
 namespace MediaBrowser.Model.Dlna
 {
@@ -55,6 +56,26 @@ namespace MediaBrowser.Model.Dlna
                 MaxWidth = maxWidth,
                 MaxHeight = maxHeight
             };
+        }
+
+        private static double GetVideoBitrateScaleFactor(string codec)
+        {
+            if (StringHelper.EqualsIgnoreCase(codec, "h265") ||
+                StringHelper.EqualsIgnoreCase(codec, "hevc"))
+            {
+                return .5;
+            }
+            return 1;
+        }
+
+        public static int ScaleBitrate(int bitrate, string inputVideoCodec, string outputVideoCodec)
+        {
+            var inputScaleFactor = GetVideoBitrateScaleFactor(inputVideoCodec);
+            var outputScaleFactor = GetVideoBitrateScaleFactor(outputVideoCodec);
+            var scaleFactor = outputScaleFactor/inputScaleFactor;
+            var newBitrate = scaleFactor*bitrate;
+
+            return Convert.ToInt32(newBitrate);
         }
     }
 }

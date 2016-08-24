@@ -1,6 +1,5 @@
 ﻿using MediaBrowser.Common.Events;
 using MediaBrowser.Common.Extensions;
-using MediaBrowser.Common.IO;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
@@ -15,7 +14,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonIO;
@@ -256,7 +254,7 @@ namespace MediaBrowser.Providers.Subtitles
                 _monitor.ReportFileSystemChangeComplete(path, false);
             }
 
-            return _libraryManager.GetItemById(itemId).RefreshMetadata(new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+            return _libraryManager.GetItemById(itemId).RefreshMetadata(new MetadataRefreshOptions(new DirectoryService(_logger, _fileSystem))
             {
                 ImageRefreshMode = ImageRefreshMode.ValidationOnly,
                 MetadataRefreshMode = MetadataRefreshMode.ValidationOnly

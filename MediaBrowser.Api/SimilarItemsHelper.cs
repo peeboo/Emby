@@ -9,6 +9,8 @@ using ServiceStack;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+using MediaBrowser.Model.Dto;
 
 namespace MediaBrowser.Api
 {
@@ -23,10 +25,24 @@ namespace MediaBrowser.Api
         /// <value>The id.</value>
         [ApiMember(Name = "Id", Description = "Item Id", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "GET")]
         public string Id { get; set; }
+
+        public string ExcludeArtistIds { get; set; }
     }
 
-    public class BaseGetSimilarItems : IReturn<ItemsResult>, IHasItemFields
+    public class BaseGetSimilarItems : IReturn<ItemsResult>, IHasDtoOptions
     {
+        [ApiMember(Name = "EnableImages", Description = "Optional, include image information in output", IsRequired = false, DataType = "boolean", ParameterType = "query", Verb = "GET")]
+        public bool? EnableImages { get; set; }
+
+        [ApiMember(Name = "EnableUserData", Description = "Optional, include user data", IsRequired = false, DataType = "boolean", ParameterType = "query", Verb = "GET")]
+        public bool? EnableUserData { get; set; }
+
+        [ApiMember(Name = "ImageTypeLimit", Description = "Optional, the max number of images to return, per image type", IsRequired = false, DataType = "int", ParameterType = "query", Verb = "GET")]
+        public int? ImageTypeLimit { get; set; }
+
+        [ApiMember(Name = "EnableImageTypes", Description = "Optional. The image types to include in the output.", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "GET")]
+        public string EnableImageTypes { get; set; }
+
         /// <summary>
         /// Gets or sets the user id.
         /// </summary>
@@ -54,7 +70,7 @@ namespace MediaBrowser.Api
     /// </summary>
     public static class SimilarItemsHelper
     {
-        internal static ItemsResult GetSimilarItemsResult(DtoOptions dtoOptions, IUserManager userManager, IItemRepository itemRepository, ILibraryManager libraryManager, IUserDataManager userDataRepository, IDtoService dtoService, ILogger logger, BaseGetSimilarItemsFromItem request, Type[] includeTypes, Func<BaseItem, List<PersonInfo>, List<PersonInfo>, BaseItem, int> getSimilarityScore)
+        internal static async Task<QueryResult<BaseItemDto>> GetSimilarItemsResult(DtoOptions dtoOptions, IUserManager userManager, IItemRepository itemRepository, ILibraryManager libraryManager, IUserDataManager userDataRepository, IDtoService dtoService, ILogger logger, BaseGetSimilarItemsFromItem request, Type[] includeTypes, Func<BaseItem, List<PersonInfo>, List<PersonInfo>, BaseItem, int> getSimilarityScore)
         {
             var user = !string.IsNullOrWhiteSpace(request.UserId) ? userManager.GetUserById(request.UserId) : null;
 
@@ -68,6 +84,12 @@ namespace MediaBrowser.Api
                 Recursive = true
             };
 
+            // ExcludeArtistIds
+            if (!string.IsNullOrEmpty(request.ExcludeArtistIds))
+            {
+                query.ExcludeArtistIds = request.ExcludeArtistIds.Split('|');
+            }
+
             var inputItems = libraryManager.GetItemList(query);
 
             var items = GetSimilaritems(item, libraryManager, inputItems, getSimilarityScore)
@@ -80,14 +102,14 @@ namespace MediaBrowser.Api
                 returnItems = returnItems.Take(request.Limit.Value);
             }
 
-            var result = new ItemsResult
+            var dtos = await dtoService.GetBaseItemDtos(returnItems, dtoOptions, user).ConfigureAwait(false);
+
+            return new QueryResult<BaseItemDto>
             {
-                Items = dtoService.GetBaseItemDtos(returnItems, dtoOptions, user).ToArray(),
+                Items = dtos.ToArray(),
 
                 TotalRecordCount = items.Count
             };
-
-            return result;
         }
 
         /// <summary>
@@ -116,24 +138,12 @@ namespace MediaBrowser.Api
 
         private static IEnumerable<string> GetTags(BaseItem item)
         {
-            var hasTags = item as IHasTags;
-            if (hasTags != null)
-            {
-                return hasTags.Tags;
-            }
-
-            return new List<string>();
+            return item.Tags;
         }
 
         private static IEnumerable<string> GetKeywords(BaseItem item)
         {
-            var hasTags = item as IHasKeywords;
-            if (hasTags != null)
-            {
-                return hasTags.Keywords;
-            }
-
-            return new List<string>();
+            return item.Keywords;
         }
 
         /// <summary>

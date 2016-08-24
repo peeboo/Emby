@@ -10,7 +10,6 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using CommonIO;
-using MediaBrowser.Common.IO;
 
 namespace MediaBrowser.LocalMetadata.Savers
 {
@@ -80,7 +79,7 @@ namespace MediaBrowser.LocalMetadata.Savers
 
             var xmlFilePath = GetSavePath(item);
 
-            XmlSaverHelpers.Save(builder, xmlFilePath, new List<string> { }, _config, _fileSystem);
+            XmlSaverHelpers.Save(builder, xmlFilePath, new List<string>(), _config, _fileSystem);
         }
 
         /// <summary>

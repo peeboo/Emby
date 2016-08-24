@@ -24,6 +24,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonIO;
+using MediaBrowser.Common.Extensions;
 
 namespace MediaBrowser.Server.Implementations.Connect
 {
@@ -61,6 +62,16 @@ namespace MediaBrowser.Server.Implementations.Connect
             get
             {
                 var address = _config.Configuration.WanDdns;
+
+                if (!string.IsNullOrWhiteSpace(address))
+                {
+                    Uri newUri;
+
+                    if (Uri.TryCreate(address, UriKind.Absolute, out newUri))
+                    {
+                        address = newUri.Host;
+                    }
+                }
 
                 if (string.IsNullOrWhiteSpace(address) && DiscoveredWanIpAddress != null)
                 {
@@ -127,16 +138,19 @@ namespace MediaBrowser.Server.Implementations.Connect
             _securityManager = securityManager;
             _fileSystem = fileSystem;
 
-            _config.ConfigurationUpdated += _config_ConfigurationUpdated;
-
             LoadCachedData();
+        }
+
+        internal void Start()
+        {
+            _config.ConfigurationUpdated += _config_ConfigurationUpdated;
         }
 
         internal void OnWanAddressResolved(IPAddress address)
         {
             DiscoveredWanIpAddress = address;
 
-            UpdateConnectInfo();
+            var task = UpdateConnectInfo();
         }
 
         private async Task UpdateConnectInfo()
@@ -165,7 +179,7 @@ namespace MediaBrowser.Server.Implementations.Connect
 
             try
             {
-                var localAddress = _appHost.LocalApiUrl;
+                var localAddress = await _appHost.GetLocalApiUrl().ConfigureAwait(false);
 
                 var hasExistingRecord = !string.IsNullOrWhiteSpace(ConnectServerId) &&
                                   !string.IsNullOrWhiteSpace(ConnectAccessKey);
@@ -205,24 +219,26 @@ namespace MediaBrowser.Server.Implementations.Connect
         }
 
         private string _lastReportedIdentifier;
-        private string GetConnectReportingIdentifier()
+        private async Task<string> GetConnectReportingIdentifier()
         {
-            return GetConnectReportingIdentifier(_appHost.LocalApiUrl, WanApiAddress);
+            var url = await _appHost.GetLocalApiUrl().ConfigureAwait(false);
+            return GetConnectReportingIdentifier(url, WanApiAddress);
         }
         private string GetConnectReportingIdentifier(string localAddress, string remoteAddress)
         {
             return (remoteAddress ?? string.Empty) + (localAddress ?? string.Empty);
         }
 
-        void _config_ConfigurationUpdated(object sender, EventArgs e)
+        async void _config_ConfigurationUpdated(object sender, EventArgs e)
         {
             // If info hasn't changed, don't report anything
-            if (string.Equals(_lastReportedIdentifier, GetConnectReportingIdentifier(), StringComparison.OrdinalIgnoreCase))
+            var connectIdentifier = await GetConnectReportingIdentifier().ConfigureAwait(false);
+            if (string.Equals(_lastReportedIdentifier, connectIdentifier, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
 
-            UpdateConnectInfo();
+            await UpdateConnectInfo().ConfigureAwait(false);
         }
 
         private async Task CreateServerRegistration(string wanApiAddress, string localAddress)
@@ -237,8 +253,8 @@ namespace MediaBrowser.Server.Implementations.Connect
 
             var postData = new Dictionary<string, string>
             {
-                {"name", _appHost.FriendlyName}, 
-                {"url", wanApiAddress}, 
+                {"name", _appHost.FriendlyName},
+                {"url", wanApiAddress},
                 {"systemId", _appHost.SystemId}
             };
 
@@ -344,6 +360,8 @@ namespace MediaBrowser.Server.Implementations.Connect
         private void LoadCachedData()
         {
             var path = CacheFilePath;
+
+            _logger.Info("Loading data from {0}", path);
 
             try
             {
@@ -544,9 +562,22 @@ namespace MediaBrowser.Server.Implementations.Connect
             }
             catch (HttpException ex)
             {
-                if (!ex.StatusCode.HasValue ||
-                    ex.StatusCode.Value != HttpStatusCode.NotFound ||
-                    !Validator.EmailIsValid(connectUsername))
+                if (!ex.StatusCode.HasValue)
+                {
+                    throw;
+                }
+
+                // If they entered a username, then whatever the error is just throw it, for example, user not found
+                if (!Validator.EmailIsValid(connectUsername))
+                {
+                    if (ex.StatusCode.Value == HttpStatusCode.NotFound)
+                    {
+                        throw new ResourceNotFoundException();
+                    }
+                    throw;
+                }
+
+                if (ex.StatusCode.Value != HttpStatusCode.NotFound)
                 {
                     throw;
                 }
@@ -891,8 +922,7 @@ namespace MediaBrowser.Server.Implementations.Connect
         private async Task RefreshGuestNames(List<ServerUserAuthorizationResponse> list, bool refreshImages)
         {
             var users = _userManager.Users
-                .Where(i => !string.IsNullOrEmpty(i.ConnectUserId) &&
-                    (i.ConnectLinkType.HasValue && i.ConnectLinkType.Value == UserLinkType.Guest))
+                .Where(i => !string.IsNullOrEmpty(i.ConnectUserId) && i.ConnectLinkType.HasValue && i.ConnectLinkType.Value == UserLinkType.Guest)
                     .ToList();
 
             foreach (var user in users)
