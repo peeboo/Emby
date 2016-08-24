@@ -44,7 +44,9 @@ define(['dialogHelper', 'layoutManager', 'dialogText', 'html!./../prompt/icons.h
             html += '</h2>';
         }
 
-        if (options.text) {
+        var text = options.html || options.text;
+
+        if (text) {
 
             if (options.title) {
                 html += '<p style="margin-top:2em;">';
@@ -52,7 +54,7 @@ define(['dialogHelper', 'layoutManager', 'dialogText', 'html!./../prompt/icons.h
                 html += '<p>';
             }
 
-            html += options.text;
+            html += text;
             html += '</p>';
         }
 
@@ -60,7 +62,7 @@ define(['dialogHelper', 'layoutManager', 'dialogText', 'html!./../prompt/icons.h
         if (raisedButtons) {
             html += '<paper-button raised class="btnSubmit"><iron-icon icon="dialog:check"></iron-icon><span>' + dialogText.get(buttonText) + '</span></paper-button>';
         } else {
-            html += '<div style="text-align:right;">';
+            html += '<div class="buttons" style="text-align:right;">';
             html += '<paper-button class="btnSubmit">' + dialogText.get(buttonText) + '</paper-button>';
             html += '</div>';
         }

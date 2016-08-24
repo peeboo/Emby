@@ -7,10 +7,8 @@ using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Providers;
 using MediaBrowser.Model.Serialization;
 using MediaBrowser.Providers.Omdb;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -22,7 +20,7 @@ namespace MediaBrowser.Providers.TV
     {
         private readonly IJsonSerializer _jsonSerializer;
         private readonly IHttpClient _httpClient;
-        private OmdbItemProvider _itemProvider;
+        private readonly OmdbItemProvider _itemProvider;
 
         public OmdbEpisodeProvider(IJsonSerializer jsonSerializer, IHttpClient httpClient, ILogger logger, ILibraryManager libraryManager)
         {
@@ -42,6 +40,12 @@ namespace MediaBrowser.Providers.TV
             {
                 Item = new Episode()
             };
+
+            // Allowing this will dramatically increase scan times
+            if (info.IsMissingEpisode || info.IsVirtualUnaired)
+            {
+                return result;
+            }
 
             var imdbId = info.GetProviderId(MetadataProviders.Imdb);
             if (string.IsNullOrWhiteSpace(imdbId))

@@ -1,4 +1,4 @@
-﻿define(['appSettings', 'appStorage', 'libraryBrowser', 'jQuery'], function (appSettings, appStorage, LibraryBrowser, $) {
+﻿define(['appSettings', 'appStorage', 'libraryBrowser', 'apphost', 'jQuery'], function (appSettings, appStorage, LibraryBrowser, appHost, $) {
 
     var showOverlayTimeout;
 
@@ -28,10 +28,15 @@
             return;
         }
 
+        if (!elem.animate) {
+            elem.classList.add('hide');
+            return;
+        }
+
         requestAnimationFrame(function () {
             var keyframes = [
-              { height: '100%', offset: 0 },
-              { height: '0', offset: 1 }];
+              { transform: 'translateY(0)', offset: 0 },
+              { transform: 'translateY(100%)', offset: 1 }];
             var timing = { duration: 300, iterations: 1, fill: 'forwards', easing: 'ease-out' };
 
             elem.animate(keyframes, timing).onfinish = function () {
@@ -48,12 +53,15 @@
 
         elem.classList.remove('hide');
 
+        if (!elem.animate) {
+            return;
+        }
+
         requestAnimationFrame(function () {
-            elem.style.display = 'block';
 
             var keyframes = [
-              { height: '0', offset: 0 },
-              { height: '100%', offset: 1 }];
+              { transform: 'translateY(100%)', offset: 0 },
+              { transform: 'translateY(0)', offset: 1 }];
             var timing = { duration: 300, iterations: 1, fill: 'forwards', easing: 'ease-out' };
             elem.animate(keyframes, timing);
         });
@@ -262,7 +270,7 @@
                 });
             }
 
-            if (user.Policy.EnableContentDownloading && AppInfo.supportsDownloading) {
+            if (user.Policy.EnableContentDownloading && appHost.supports('filedownload')) {
                 if (mediaType) {
                     items.push({
                         name: Globalize.translate('ButtonDownload'),
@@ -478,10 +486,17 @@
                                 break;
                             case 'download':
                                 {
-                                    var downloadHref = ApiClient.getUrl("Items/" + itemId + "/Download", {
-                                        api_key: ApiClient.accessToken()
+                                    require(['fileDownloader'], function (fileDownloader) {
+                                        var downloadHref = ApiClient.getUrl("Items/" + itemId + "/Download", {
+                                            api_key: ApiClient.accessToken()
+                                        });
+
+                                        fileDownloader.download([
+                                        {
+                                            url: downloadHref,
+                                            itemId: itemId
+                                        }]);
                                     });
-                                    window.location.href = downloadHref;
 
                                     break;
                                 }
@@ -1129,7 +1144,7 @@
                 });
             }
 
-            if (user.Policy.EnableContentDownloading && AppInfo.supportsDownloading) {
+            if (user.Policy.EnableContentDownloading && appHost.supports('filedownload')) {
                 //items.push({
                 //    name: Globalize.translate('ButtonDownload'),
                 //    id: 'download',
@@ -1141,6 +1156,16 @@
                 name: Globalize.translate('HeaderGroupVersions'),
                 id: 'groupvideos',
                 ironIcon: 'call-merge'
+            });
+
+            items.push({
+                name: Globalize.translate('MarkPlayed'),
+                id: 'markplayed'
+            });
+
+            items.push({
+                name: Globalize.translate('MarkUnplayed'),
+                id: 'markunplayed'
             });
 
             items.push({
@@ -1188,6 +1213,18 @@
                                 break;
                             case 'groupvideos':
                                 combineVersions($.mobile.activePage, items);
+                                break;
+                            case 'markplayed':
+                                items.forEach(function (itemId) {
+                                    ApiClient.markPlayed(Dashboard.getCurrentUserId(), itemId);
+                                });
+                                hideSelections();
+                                break;
+                            case 'markunplayed':
+                                items.forEach(function (itemId) {
+                                    ApiClient.markUnplayed(Dashboard.getCurrentUserId(), itemId);
+                                });
+                                hideSelections();
                                 break;
                             case 'refresh':
                                 items.map(function (itemId) {
