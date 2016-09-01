@@ -72,7 +72,7 @@ namespace MediaBrowser.Server.Implementations.UserViews
                 User = view.UserId.HasValue ? _userManager.GetUserById(view.UserId.Value) : null,
                 CollapseBoxSetItems = false,
                 Recursive = recursive,
-                ExcludeItemTypes = new[] { "UserView", "CollectionFolder" }
+                ExcludeItemTypes = new[] { "UserView", "CollectionFolder", "Person" },
 
             }).ConfigureAwait(false);
 
@@ -85,11 +85,6 @@ namespace MediaBrowser.Server.Implementations.UserViews
                     if (series != null)
                     {
                         return series;
-                    }
-                    var episodeSeason = episode.Season;
-                    if (episodeSeason != null)
-                    {
-                        return episodeSeason;
                     }
 
                     return episode;
@@ -153,7 +148,8 @@ namespace MediaBrowser.Server.Implementations.UserViews
                 CollectionType.HomeVideos,
                 CollectionType.BoxSets,
                 CollectionType.Playlists,
-                CollectionType.Photos
+                CollectionType.Photos,
+                string.Empty
             };
 
             return collectionStripViewTypes.Contains(view.ViewType ?? string.Empty);

@@ -1,4 +1,4 @@
-﻿define(['jQuery'], function ($) {
+﻿define(['jQuery', 'listViewStyle'], function ($) {
 
     function reload(page) {
 
@@ -29,23 +29,23 @@
                 }
 
                 itemHtml += '<a class="clearLink" href="notificationsetting.html?type=' + i.Type + '">';
-                itemHtml += '<paper-icon-item>';
+                itemHtml += '<div class="listItem">';
 
                 if (i.Enabled) {
-                    itemHtml += '<paper-fab mini class="blue" icon="notifications-active" item-icon></paper-fab>';
+                    itemHtml += '<i class="listItemIcon md-icon">notifications_active</i>';
                 }
                 else {
-                    itemHtml += '<paper-fab mini style="background-color:#999;" icon="notifications-off" item-icon></paper-fab>';
+                    itemHtml += '<i class="listItemIcon md-icon" style="background-color:#999;">notifications_off</i>';
                 }
 
-                itemHtml += '<paper-item-body two-line>';
-                itemHtml += '<div>' + i.Name + '</div>';
+                itemHtml += '<div class="listItemBody two-line">';
+                itemHtml += '<div class="listItemBodyText">' + i.Name + '</div>';
 
-                itemHtml += '</paper-item-body>';
+                itemHtml += '</div>';
 
-                itemHtml += '<paper-icon-button icon="mode-edit"></paper-icon-button>';
+                itemHtml += '<button type="button" is="paper-icon-button-light"><i class="md-icon">mode_edit</i></button>';
 
-                itemHtml += '</paper-icon-item>';
+                itemHtml += '</div>';
                 itemHtml += '</a>';
 
                 return itemHtml;
@@ -62,13 +62,25 @@
         });
     }
 
-    $(document).on('pageshow', "#notificationSettingsPage", function () {
+    function getTabs() {
+        return [
+        {
+            href: 'notificationsettings.html',
+            name: Globalize.translate('TabNotifications')
+        },
+        {
+            href: 'appservices.html?context=notifications',
+            name: Globalize.translate('TabServices')
+        }];
+    }
 
-        var page = this;
+    return function (view, params) {
 
-        require(['paper-fab', 'paper-item-body', 'paper-icon-item'], function () {
-            reload(page);
+        view.addEventListener('viewshow', function () {
+
+            LibraryMenu.setTabs('notifications', 0, getTabs);
+
+            reload(view);
         });
-    });
-
+    };
 });

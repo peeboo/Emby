@@ -3,7 +3,6 @@ using MediaBrowser.Controller.Devices;
 using MediaBrowser.Controller.Dlna;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaEncoding;
-using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Extensions;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Net;
@@ -63,9 +62,9 @@ namespace MediaBrowser.Api.Playback.Hls
         /// <param name="request">The request.</param>
         /// <param name="isLive">if set to <c>true</c> [is live].</param>
         /// <returns>System.Object.</returns>
-        protected object ProcessRequest(StreamRequest request, bool isLive)
+        protected async Task<object> ProcessRequest(StreamRequest request, bool isLive)
         {
-            return ProcessRequestAsync(request, isLive).Result;
+            return await ProcessRequestAsync(request, isLive).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -282,24 +281,7 @@ namespace MediaBrowser.Api.Playback.Hls
         {
             var isLiveStream = (state.RunTimeTicks ?? 0) == 0;
 
-            if (state.VideoRequest.ForceLiveStream)
-            {
-                return true;
-            }
-
             return isLiveStream;
-        }
-
-        protected override bool CanStreamCopyAudio(StreamState state, List<string> supportedAudioCodecs)
-        {
-            var isLiveStream = IsLiveStream(state);
-
-            if (!isLiveStream)
-            {
-                return false;
-            }
-
-            return base.CanStreamCopyAudio(state, supportedAudioCodecs);
         }
     }
 }

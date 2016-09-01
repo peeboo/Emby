@@ -1,4 +1,4 @@
-﻿define(['libraryBrowser', 'jQuery'], function (libraryBrowser, $) {
+﻿define(['libraryBrowser', 'emby-tabs', 'emby-button'], function (libraryBrowser) {
 
     var defaultFirstSection = 'smalllibrarytiles';
 
@@ -68,10 +68,10 @@
             return Sections.loadLibraryTiles(elem, user, 'backdrop', index, false, showLibraryTileNames);
         }
         else if (section == 'smalllibrarytiles') {
-            return Sections.loadLibraryTiles(elem, user, 'homePageSmallBackdrop', index, false, showLibraryTileNames);
+            return Sections.loadLibraryTiles(elem, user, 'smallBackdrop', index, false, showLibraryTileNames);
         }
         else if (section == 'smalllibrarytiles-automobile') {
-            return Sections.loadLibraryTiles(elem, user, 'homePageSmallBackdrop', index, true, showLibraryTileNames);
+            return Sections.loadLibraryTiles(elem, user, 'smallBackdrop', index, true, showLibraryTileNames);
         }
         else if (section == 'librarytiles-automobile') {
             return Sections.loadLibraryTiles(elem, user, 'backdrop', index, true, showLibraryTileNames);
@@ -152,22 +152,23 @@
     function showWelcomeIfNeeded(page, displayPreferences) {
 
         if (displayPreferences.CustomPrefs[homePageTourKey] == homePageDismissValue) {
-            $('.welcomeMessage', page).hide();
+            page.querySelector('.welcomeMessage').classList.add('hide');
         } else {
 
             Dashboard.hideLoadingMsg();
 
-            var elem = $('.welcomeMessage', page).show();
+            var elem = page.querySelector('.welcomeMessage');
+            elem.classList.remove('hide');
 
             if (displayPreferences.CustomPrefs[homePageTourKey]) {
 
-                $('.tourHeader', elem).html(Globalize.translate('HeaderWelcomeBack'));
-                $('.tourButtonText', elem).html(Globalize.translate('ButtonTakeTheTourToSeeWhatsNew'));
+                elem.querySelector('.tourHeader').innerHTML = Globalize.translate('HeaderWelcomeBack');
+                elem.querySelector('.tourButtonText').innerHTML = Globalize.translate('ButtonTakeTheTourToSeeWhatsNew');
 
             } else {
 
-                $('.tourHeader', elem).html(Globalize.translate('HeaderWelcomeToProjectWebClient'));
-                $('.tourButtonText', elem).html(Globalize.translate('ButtonTakeTheTour'));
+                elem.querySelector('.tourHeader').innerHTML = Globalize.translate('HeaderWelcomeToProjectWebClient');
+                elem.querySelector('.tourButtonText').innerHTML = Globalize.translate('ButtonTakeTheTour');
             }
         }
     }
@@ -205,49 +206,31 @@
                 newSlideShow.show();
 
                 dismissWelcome(page, userId);
-                $('.welcomeMessage', page).hide();
+                page.querySelector('.welcomeMessage').classList.add('hide');
             });
         });
     }
 
     function loadHomeTab(page, tabContent) {
 
-        if (libraryBrowser.needsRefresh(tabContent)) {
-            if (window.ApiClient) {
-                var userId = Dashboard.getCurrentUserId();
-                Dashboard.showLoadingMsg();
+        if (window.ApiClient) {
+            var userId = Dashboard.getCurrentUserId();
+            Dashboard.showLoadingMsg();
 
-                getDisplayPreferences('home', userId).then(function (result) {
+            getDisplayPreferences('home', userId).then(function (result) {
 
-                    Dashboard.getCurrentUser().then(function (user) {
+                Dashboard.getCurrentUser().then(function (user) {
 
-                        loadSections(tabContent, user, result).then(function () {
+                    loadSections(tabContent, user, result).then(function () {
 
-                            if (!AppInfo.isNativeApp) {
-                                showWelcomeIfNeeded(page, result);
-                            }
-                            Dashboard.hideLoadingMsg();
-
-                            libraryBrowser.setLastRefreshed(tabContent);
-                        });
-
+                        if (!AppInfo.isNativeApp) {
+                            showWelcomeIfNeeded(page, result);
+                        }
+                        Dashboard.hideLoadingMsg();
                     });
+
                 });
-            }
-        }
-    }
-
-    function onPlaybackStop(e, state) {
-
-        if (state.NowPlayingItem && state.NowPlayingItem.MediaType == 'Video') {
-            var page = $.mobile.activePage;
-            var pageTabsContainer = page.querySelector('.pageTabsContainer');
-
-            pageTabsContainer.dispatchEvent(new CustomEvent("tabchange", {
-                detail: {
-                    selectedTabIndex: libraryBrowser.selectedTab(pageTabsContainer)
-                }
-            }));
+            });
         }
     }
 
@@ -265,16 +248,15 @@
             loadHomeTab(view, tabContent);
         };
 
-        var pageTabsContainer = view.querySelector('.pageTabsContainer');
+        var viewTabs = view.querySelector('.libraryViewNav');
 
-        libraryBrowser.configurePaperLibraryTabs(view, view.querySelector('paper-tabs'), pageTabsContainer, 'home.html');
+        libraryBrowser.configurePaperLibraryTabs(view, viewTabs, view.querySelectorAll('.pageTabContent'), [0, 1, 2, 3]);
 
         var tabControllers = [];
         var renderedTabs = [];
 
-        function loadTab(page, index) {
+        function getTabController(page, index, callback) {
 
-            var tabContent = page.querySelector('.pageTabContent[data-index=\'' + index + '\']');
             var depends = [];
 
             switch (index) {
@@ -293,16 +275,17 @@
                     break;
                 default:
                     return;
-                    break;
             }
 
             require(depends, function (controllerFactory) {
-
+                var tabContent;
                 if (index == 0) {
+                    tabContent = view.querySelector('.pageTabContent[data-index=\'' + index + '\']');
                     self.tabContent = tabContent;
                 }
                 var controller = tabControllers[index];
                 if (!controller) {
+                    tabContent = view.querySelector('.pageTabContent[data-index=\'' + index + '\']');
                     controller = index ? new controllerFactory(view, params, tabContent) : self;
                     tabControllers[index] = controller;
 
@@ -311,6 +294,24 @@
                     }
                 }
 
+                callback(controller);
+            });
+        }
+
+        function preLoadTab(page, index) {
+
+            getTabController(page, index, function (controller) {
+                if (renderedTabs.indexOf(index) == -1) {
+                    if (controller.preRender) {
+                        controller.preRender();
+                    }
+                }
+            });
+        }
+
+        function loadTab(page, index) {
+
+            getTabController(page, index, function (controller) {
                 if (renderedTabs.indexOf(index) == -1) {
                     renderedTabs.push(index);
                     controller.renderTab();
@@ -318,7 +319,11 @@
             });
         }
 
-        pageTabsContainer.addEventListener('tabchange', function (e) {
+        viewTabs.addEventListener('beforetabchange', function (e) {
+            preLoadTab(view, parseInt(e.detail.selectedTabIndex));
+        });
+
+        viewTabs.addEventListener('tabchange', function (e) {
             loadTab(view, parseInt(e.detail.selectedTabIndex));
         });
 
@@ -334,12 +339,49 @@
             view.querySelector('.libraryViewNav').classList.add('hide');
         }
 
+        function onPlaybackStop(e, state) {
+
+            if (state.NowPlayingItem && state.NowPlayingItem.MediaType == 'Video') {
+
+                viewTabs.triggerTabChange();
+            }
+        }
+
+        function onWebSocketMessage(e, data) {
+
+            var msg = data;
+
+            if (msg.MessageType === "UserDataChanged") {
+
+                if (msg.Data.UserId == Dashboard.getCurrentUserId()) {
+
+                    renderedTabs = [];
+                }
+            }
+
+        }
+
         view.addEventListener('viewshow', function (e) {
             Events.on(MediaController, 'playbackstop', onPlaybackStop);
+            Events.on(ApiClient, "websocketmessage", onWebSocketMessage);
         });
 
         view.addEventListener('viewbeforehide', function (e) {
             Events.off(MediaController, 'playbackstop', onPlaybackStop);
+            Events.off(ApiClient, "websocketmessage", onWebSocketMessage);
+        });
+
+        if (AppInfo.enableHeadRoom) {
+            require(["headroom-window"], function (headroom) {
+                headroom.add(viewTabs);
+                self.headroom = headroom;
+            });
+        }
+
+        view.addEventListener('viewdestroy', function (e) {
+            if (self.headroom) {
+                self.headroom.remove(viewTabs);
+            }
         });
     };
 });

@@ -45,6 +45,7 @@
         $('#chkEnableMediaPlayback', page).checked(user.Policy.EnableMediaPlayback);
         $('#chkEnableAudioPlaybackTranscoding', page).checked(user.Policy.EnableAudioPlaybackTranscoding);
         $('#chkEnableVideoPlaybackTranscoding', page).checked(user.Policy.EnableVideoPlaybackTranscoding);
+        $('#chkEnableVideoPlaybackRemuxing', page).checked(user.Policy.EnablePlaybackRemuxing);
 
         $('#chkEnableSync', page).checked(user.Policy.EnableSync);
         $('#chkEnableSyncTranscoding', page).checked(user.Policy.EnableSyncTranscoding);
@@ -121,7 +122,9 @@
                 noActionCallback();
             }
         }
-    } function showEmbyConnectErrorMessage(username) {
+    }
+
+    function showEmbyConnectErrorMessage(username) {
 
         var html;
         var text;
@@ -145,7 +148,6 @@
             });
         });
     }
-
 
     function onSaveComplete(page, user) {
 
@@ -185,6 +187,7 @@
         user.Policy.EnableMediaPlayback = $('#chkEnableMediaPlayback', page).checked();
         user.Policy.EnableAudioPlaybackTranscoding = $('#chkEnableAudioPlaybackTranscoding', page).checked();
         user.Policy.EnableVideoPlaybackTranscoding = $('#chkEnableVideoPlaybackTranscoding', page).checked();
+        user.Policy.EnablePlaybackRemuxing = $('#chkEnableVideoPlaybackRemuxing', page).checked();
 
         user.Policy.EnableContentDownloading = $('#chkEnableDownloading', page).checked();
 
@@ -234,6 +237,8 @@
     $(document).on('pageinit', "#editUserPage", function () {
 
         $('.editUserProfileForm').off('submit', onSubmit).on('submit', onSubmit);
+
+        this.querySelector('.sharingHelp').innerHTML = Globalize.translate('OptionAllowLinkSharingHelp', 30);
 
     }).on('pagebeforeshow', "#editUserPage", function () {
 

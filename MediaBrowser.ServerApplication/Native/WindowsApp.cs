@@ -1,13 +1,18 @@
-﻿using MediaBrowser.Common.Net;
+﻿using System;
+using MediaBrowser.Common.Net;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Server.Startup.Common;
 using MediaBrowser.ServerApplication.Networking;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using CommonIO;
 using MediaBrowser.Controller.Power;
+using MediaBrowser.Model.System;
+using MediaBrowser.Server.Implementations.Persistence;
 using MediaBrowser.Server.Startup.Common.FFMpeg;
+using OperatingSystem = MediaBrowser.Server.Startup.Common.OperatingSystem;
 
 namespace MediaBrowser.ServerApplication.Native
 {
@@ -48,7 +53,7 @@ namespace MediaBrowser.ServerApplication.Native
                 return new NativeEnvironment
                 {
                     OperatingSystem = OperatingSystem.Windows,
-                    SystemArchitecture = System.Environment.Is64BitOperatingSystem ? Architecture.X86_X64 : Architecture.X86,
+                    SystemArchitecture = System.Environment.Is64BitOperatingSystem ? Architecture.X64 : Architecture.X86,
                     OperatingSystemVersionString = System.Environment.OSVersion.VersionString
                 };
             }
@@ -134,7 +139,12 @@ namespace MediaBrowser.ServerApplication.Native
 
         public void PreventSystemStandby()
         {
-            Standby.PreventSystemStandby();
+            MainStartup.Invoke(Standby.PreventSleep);
+        }
+
+        public void AllowSystemStandby()
+        {
+            MainStartup.Invoke(Standby.AllowSleep);
         }
 
         public IPowerManagement GetPowerManagement()
@@ -148,25 +158,50 @@ namespace MediaBrowser.ServerApplication.Native
 
             info.FFMpegFilename = "ffmpeg.exe";
             info.FFProbeFilename = "ffprobe.exe";
-            info.Version = "20160401";
-            info.ArchiveType = "7z";
-            info.IsEmbedded = true;
-            info.DownloadUrls = GetDownloadUrls();
+            info.Version = "0";
 
             return info;
         }
 
-        private string[] GetDownloadUrls()
+        public void LaunchUrl(string url)
         {
-            switch (Environment.SystemArchitecture)
+            var process = new Process
             {
-                case Architecture.X86_X64:
-                    return new[] { "MediaBrowser.ServerApplication.ffmpeg.ffmpegx64.7z" };
-                case Architecture.X86:
-                    return new[] { "MediaBrowser.ServerApplication.ffmpeg.ffmpegx86.7z" };
-            }
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = url
+                },
 
-            return new string[] { };
+                EnableRaisingEvents = true,
+            };
+
+            process.Exited += ProcessExited;
+
+            try
+            {
+                process.Start();
+            }
+            catch (Exception ex)
+            {
+                _logger.ErrorException("Error launching url: {0}", ex, url);
+
+                throw;
+            }
+        }
+
+        public IDbConnector GetDbConnector()
+        {
+            return new DbConnector(_logger);
+        }
+
+        /// <summary>
+        /// Processes the exited.
+        /// </summary>
+        /// <param name="sender">The sender.</param>
+        /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
+        private static void ProcessExited(object sender, EventArgs e)
+        {
+            ((Process)sender).Dispose();
         }
     }
 }

@@ -2,16 +2,15 @@
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.Entities;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Runtime.Serialization;
-using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Model.Providers;
 
 namespace MediaBrowser.Controller.Entities
 {
     /// <summary>
     /// Class Trailer
     /// </summary>
-    public class Trailer : Video, IHasCriticRating, IHasProductionLocations, IHasBudget, IHasKeywords, IHasTaglines, IHasMetascore, IHasLookupInfo<TrailerInfo>
+    public class Trailer : Video, IHasCriticRating, IHasProductionLocations, IHasBudget, IHasTaglines, IHasMetascore, IHasOriginalTitle, IHasLookupInfo<TrailerInfo>
     {
         public List<string> ProductionLocations { get; set; }
 
@@ -29,8 +28,6 @@ namespace MediaBrowser.Controller.Entities
         public float? Metascore { get; set; }
 
         public List<MediaUrl> RemoteTrailers { get; set; }
-
-        public List<string> Keywords { get; set; }
 
         [IgnoreDataMember]
         public bool IsLocalTrailer
@@ -55,26 +52,6 @@ namespace MediaBrowser.Controller.Entities
         /// </summary>
         /// <value>The revenue.</value>
         public double? Revenue { get; set; }
-
-        protected override string CreateUserDataKey()
-        {
-            var key = Movie.GetMovieUserDataKey(this);
-
-            if (!string.IsNullOrWhiteSpace(key))
-            {
-                key = key + "-trailer";
-
-                // Make sure different trailers have their own data.
-                if (RunTimeTicks.HasValue)
-                {
-                    key += "-" + RunTimeTicks.Value.ToString(CultureInfo.InvariantCulture);
-                }
-
-                return key;
-            }
-
-            return base.CreateUserDataKey();
-        }
 
         public override UnratedItem GetBlockUnratedType()
         {
@@ -129,6 +106,33 @@ namespace MediaBrowser.Controller.Entities
             }
 
             return hasChanges;
+        }
+
+        public override List<ExternalUrl> GetRelatedUrls()
+        {
+            var list = base.GetRelatedUrls();
+
+            var imdbId = this.GetProviderId(MetadataProviders.Imdb);
+            if (!string.IsNullOrWhiteSpace(imdbId))
+            {
+                list.Add(new ExternalUrl
+                {
+                    Name = "Trakt",
+                    Url = string.Format("https://trakt.tv/movies/{0}", imdbId)
+                });
+            }
+
+            return list;
+        }
+
+        [IgnoreDataMember]
+        public override bool StopRefreshIfLocalMetadataFound
+        {
+            get
+            {
+                // Need people id's from internet metadata
+                return false;
+            }
         }
     }
 }

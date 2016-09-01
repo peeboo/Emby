@@ -213,7 +213,7 @@ namespace MediaBrowser.Controller.Entities
 
             Name = newName;
 
-			return RefreshMetadata(new MetadataRefreshOptions(new DirectoryService(FileSystem))
+			return RefreshMetadata(new MetadataRefreshOptions(new DirectoryService(Logger, FileSystem))
             {
                 ReplaceAllMetadata = true,
                 ImageRefreshMode = ImageRefreshMode.FullRefresh,
@@ -305,14 +305,7 @@ namespace MediaBrowser.Controller.Entities
 
         public bool IsFolderGrouped(Guid id)
         {
-            var config = Configuration;
-
-            if (config.ExcludeFoldersFromGrouping != null)
-            {
-                return !config.ExcludeFoldersFromGrouping.Select(i => new Guid(i)).Contains(id);
-            }
-
-            return config.GroupedFolders.Select(i => new Guid(i)).Contains(id);
+            return Configuration.GroupedFolders.Select(i => new Guid(i)).Contains(id);
         }
 
         [IgnoreDataMember]

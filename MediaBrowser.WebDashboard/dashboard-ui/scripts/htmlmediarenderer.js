@@ -1,4 +1,4 @@
-﻿define(['jQuery'], function ($) {
+﻿define([], function () {
 
     var supportsTextTracks;
     var hlsPlayer;
@@ -51,7 +51,7 @@
 
             var elem = e.target;
             elem.removeEventListener('playing', onOneAudioPlaying);
-            $('.mediaPlayerAudioContainer').hide();
+            document.querySelector('.mediaPlayerAudioContainer').classList.add('hide');
         }
 
         function onPlaying() {
@@ -103,25 +103,6 @@
             });
         }
 
-        function getStartTime(url) {
-
-            var src = url;
-
-            var parts = src.split('#');
-
-            if (parts.length > 1) {
-
-                parts = parts[parts.length - 1].split('=');
-
-                if (parts.length == 2) {
-
-                    return parseFloat(parts[1]);
-                }
-            }
-
-            return 0;
-        }
-
         function onOneVideoPlaying(e) {
 
             var element = e.target;
@@ -132,16 +113,15 @@
             var requiresNativeControls = !self.enableCustomVideoControls();
 
             if (requiresNativeControls) {
-                $(element).attr('controls', 'controls');
+                element.setAttribute('controls', 'controls');
             }
 
             if (requiresSettingStartTimeOnStart) {
-                var src = (self.currentSrc() || '').toLowerCase();
 
-                var startPositionInSeekParam = getStartTime(src);
+                var startPositionInSeekParam = currentPlayOptions.startPositionInSeekParam;
 
                 // Appending #t=xxx to the query string doesn't seem to work with HLS
-                if (startPositionInSeekParam && src.indexOf('.m3u8') != -1) {
+                if (startPositionInSeekParam && currentSrc.indexOf('.m3u8') != -1) {
 
                     var delay = browserInfo.safari ? 2500 : 0;
                     if (delay) {
@@ -157,9 +137,9 @@
 
         function createAudioElement() {
 
-            var elem = $('.mediaPlayerAudio');
+            var elem = document.querySelector('.mediaPlayerAudio');
 
-            if (!elem.length) {
+            if (!elem) {
                 var html = '';
 
                 var requiresControls = !MediaPlayer.canAutoPlayAudio();
@@ -167,18 +147,16 @@
                 if (requiresControls) {
                     html += '<div class="mediaPlayerAudioContainer" style="position: fixed;top: 40%;text-align: center;left: 0;right: 0;z-index:999999;"><div class="mediaPlayerAudioContainerInner">';;
                 } else {
-                    html += '<div class="mediaPlayerAudioContainer" style="display:none;padding: 1em;background: #222;"><div class="mediaPlayerAudioContainerInner">';;
+                    html += '<div class="mediaPlayerAudioContainer hide" style="padding: 1em;background: #222;"><div class="mediaPlayerAudioContainerInner">';;
                 }
 
                 html += '<audio class="mediaPlayerAudio" controls>';
                 html += '</audio></div></div>';
 
-                $(document.body).append(html);
+                document.body.insertAdjacentHTML('beforeend', html);
 
-                elem = $('.mediaPlayerAudio');
+                elem = document.querySelector('.mediaPlayerAudio');
             }
-
-            elem = elem[0];
 
             elem.addEventListener('playing', onOneAudioPlaying);
             elem.addEventListener('timeupdate', onTimeUpdate);
@@ -232,9 +210,10 @@
 
             html += '</video>';
 
-            var elem = $('#videoElement', '#videoPlayer').prepend(html);
+            var elem = document.querySelector('#videoPlayer #videoElement');
+            elem.insertAdjacentHTML('afterbegin', html);
 
-            var itemVideo = $('.itemVideo', elem)[0];
+            var itemVideo = elem.querySelector('.itemVideo');
 
             itemVideo.addEventListener('loadedmetadata', onLoadedMetadata);
 
@@ -352,7 +331,6 @@
 
                 return;
             }
-
             elem.crossOrigin = getCrossOriginValue(mediaSource);
             var val = streamInfo.url;
 
@@ -361,7 +339,7 @@
             }
 
             requiresSettingStartTimeOnStart = false;
-            var startTime = getStartTime(val);
+            var startTime = streamInfo.startPositionInSeekParam;
             var playNow = false;
 
             if (elem.tagName.toLowerCase() == 'audio') {
@@ -506,7 +484,9 @@
                 }
 
                 if (elem.tagName.toLowerCase() != 'audio') {
-                    $(elem).remove();
+                    if (elem.parentNode) {
+                        elem.parentNode.removeChild(elem);
+                    }
                 }
             }
         };
@@ -771,7 +751,7 @@
                 setTrackForCustomDisplay(mediaElement, null);
             } else {
                 setTrackForCustomDisplay(mediaElement, track);
-                
+
                 // null these out to disable the player's native display (handled below)
                 streamIndex = -1;
                 track = null;
@@ -830,6 +810,22 @@
             }
         };
 
+        function replaceQueryString(url, param, value) {
+            var re = new RegExp("([?|&])" + param + "=.*?(&|$)", "i");
+            if (url.match(re))
+                return url.replace(re, '$1' + param + "=" + value + '$2');
+            else if (value) {
+
+                if (url.indexOf('?') == -1) {
+                    return url + '?' + param + "=" + value;
+                }
+
+                return url + '&' + param + "=" + value;
+            }
+
+            return url;
+        }
+
         self.updateTextStreamUrls = function (startPositionTicks) {
 
             if (!self.supportsTextTracks()) {
@@ -837,8 +833,8 @@
             }
 
             var allTracks = mediaElement.textTracks; // get list of tracks
-
-            for (var i = 0; i < allTracks.length; i++) {
+            var i;
+            for (i = 0; i < allTracks.length; i++) {
 
                 var track = allTracks[i];
 
@@ -853,11 +849,13 @@
                 }
             }
 
-            $('track', mediaElement).each(function () {
+            var trackElements = mediaElement.querySelectorAll('track');
+            for (i = 0; i < trackElements.length; i++) {
 
-                this.src = replaceQueryString(this.src, 'startPositionTicks', startPositionTicks);
+                var trackElement = trackElements[i];
 
-            });
+                trackElement.src = replaceQueryString(trackElement.src, 'startPositionTicks', startPositionTicks);
+            }
         };
 
         self.enableCustomVideoControls = function () {

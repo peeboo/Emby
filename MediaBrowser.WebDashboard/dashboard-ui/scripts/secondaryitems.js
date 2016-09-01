@@ -1,4 +1,4 @@
-﻿define(['libraryBrowser', 'jQuery'], function (libraryBrowser, $) {
+﻿define(['libraryBrowser', 'listView', 'cardBuilder', 'emby-itemscontainer'], function (libraryBrowser, listView, cardBuilder) {
 
     return function (view, params) {
 
@@ -39,7 +39,7 @@
                         SortBy: "SortName",
                         SortOrder: "Ascending",
                         Recursive: params.recursive !== 'false',
-                        Fields: "PrimaryImageAspectRatio,SortName,SyncInfo",
+                        Fields: "PrimaryImageAspectRatio,SortName,BasicSyncInfo",
                         ImageTypeLimit: 1,
                         EnableImageTypes: "Primary,Backdrop,Banner,Thumb",
                         StartIndex: 0,
@@ -75,17 +75,50 @@
             return libraryBrowser.getSavedQueryKey();
         }
 
+        function parentWithClass(elem, className) {
+
+            while (!elem.classList || !elem.classList.contains(className)) {
+                elem = elem.parentNode;
+
+                if (!elem) {
+                    return null;
+                }
+            }
+
+            return elem;
+        }
         function onListItemClick(e) {
 
-            var info = libraryBrowser.getListItemInfo(this);
+            var mediaItem = parentWithClass(e.target, 'mediaItem');
+            if (mediaItem) {
+                var info = libraryBrowser.getListItemInfo(mediaItem);
 
-            if (info.mediaType == 'Photo') {
-                var query = getQuery();
+                if (info.mediaType == 'Photo') {
+                    var query = getQuery();
 
-                require(['scripts/photos'], function () {
-                    Photos.startSlideshow(view, query, info.id);
-                });
-                return false;
+                    require(['scripts/photos'], function () {
+                        Photos.startSlideshow(view, query, info.id);
+                    });
+                    return false;
+                }
+            }
+        }
+
+        function onViewStyleChange(parentItem) {
+            
+            var query = getQuery(parentItem);
+
+            var itemsContainer = view.querySelector('#items');
+
+            if (query.IncludeItemTypes == "Audio") {
+
+                itemsContainer.classList.add('vertical-list');
+                itemsContainer.classList.remove('vertical-wrap');
+
+            } else {
+
+                itemsContainer.classList.remove('vertical-list');
+                itemsContainer.classList.add('vertical-wrap');
             }
         }
 
@@ -110,16 +143,19 @@
 
                 view.querySelector('.listTopPaging').innerHTML = pagingHtml;
 
+                var itemsContainer = view.querySelector('#items');
+
                 if (query.IncludeItemTypes == "Audio") {
 
-                    html = '<div style="max-width:1000px;margin:auto;">' + libraryBrowser.getListViewHtml({
+                    html = listView.getListViewHtml({
                         items: result.Items,
                         playFromHere: true,
-                        defaultAction: 'playallfromhere',
+                        action: 'playallfromhere',
                         smallIcon: true
-                    }) + '</div>';
+                    });
 
                 } else {
+
                     var posterOptions = {
                         items: result.Items,
                         shape: "auto",
@@ -145,42 +181,53 @@
                     }
 
                     // Poster
-                    html = libraryBrowser.getPosterViewHtml(posterOptions);
+                    html = cardBuilder.getCardsHtml(posterOptions);
                 }
 
-                var elem = view.querySelector('#items');
-                elem.innerHTML = html + pagingHtml;
-                ImageLoader.lazyChildren(elem);
+                itemsContainer.innerHTML = html + pagingHtml;
+                ImageLoader.lazyChildren(itemsContainer);
 
-                $('.btnNextPage', view).on('click', function () {
+                var i, length;
+                var elems;
+
+                function onNextPageClick() {
                     query.StartIndex += query.Limit;
-                    reloadItems(parentItem);
-                });
+                    reloadItems(view);
+                }
 
-                $('.btnPreviousPage', view).on('click', function () {
+                function onPreviousPageClick() {
                     query.StartIndex -= query.Limit;
-                    reloadItems(parentItem);
-                });
+                    reloadItems(view);
+                }
 
-                libraryBrowser.setLastRefreshed(view);
+                elems = view.querySelectorAll('.btnNextPage');
+                for (i = 0, length = elems.length; i < length; i++) {
+                    elems[i].addEventListener('click', onNextPageClick);
+                }
+
+                elems = view.querySelectorAll('.btnPreviousPage');
+                for (i = 0, length = elems.length; i < length; i++) {
+                    elems[i].addEventListener('click', onPreviousPageClick);
+                }
+
                 Dashboard.hideLoadingMsg();
             });
         }
 
-        $(view).on('click', '.mediaItem', onListItemClick);
+        view.addEventListener('click', onListItemClick);
 
         view.addEventListener('viewbeforeshow', function (e) {
             if (params.parentId) {
                 ApiClient.getItem(Dashboard.getCurrentUserId(), params.parentId).then(function (parent) {
                     LibraryMenu.setTitle(parent.Name);
 
-                    if (libraryBrowser.needsRefresh(view)) {
-                        reloadItems(parent);
-                    }
+                    onViewStyleChange(parent);
+                    reloadItems(parent);
                 });
             }
 
-            else if (libraryBrowser.needsRefresh(view)) {
+            else {
+                onViewStyleChange();
                 reloadItems();
             }
         });

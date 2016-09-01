@@ -6,10 +6,11 @@ namespace MediaBrowser.Model.Configuration
         public int EncodingThreadCount { get; set; }
         public string TranscodingTempPath { get; set; }
         public double DownMixAudioBoost { get; set; }
-        public bool EnableDebugLogging { get; set; }
         public bool EnableThrottling { get; set; }
         public int ThrottleDelaySeconds { get; set; }
         public string HardwareAccelerationType { get; set; }
+        public string EncoderAppPath { get; set; }
+        public string VaapiDevice { get; set; }
 
         public EncodingOptions()
         {
@@ -17,6 +18,7 @@ namespace MediaBrowser.Model.Configuration
             EnableThrottling = true;
             ThrottleDelaySeconds = 180;
             EncodingThreadCount = -1;
+            VaapiDevice = "/dev/dri/card0";
         }
     }
 }

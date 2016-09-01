@@ -17,7 +17,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using CommonIO;
-using WebMarkupMin.Core.Minifiers;
+using WebMarkupMin.Core;
 
 namespace MediaBrowser.WebDashboard.Api
 {
@@ -55,6 +55,11 @@ namespace MediaBrowser.WebDashboard.Api
 
     [Route("/robots.txt", "GET")]
     public class GetRobotsTxt
+    {
+    }
+
+    [Route("/web/staticfiles", "GET")]
+    public class GetCacheFiles
     {
     }
 
@@ -133,11 +138,42 @@ namespace MediaBrowser.WebDashboard.Api
         /// </summary>
         /// <param name="request">The request.</param>
         /// <returns>System.Object.</returns>
-        public object Get(GetDashboardConfigurationPage request)
+        public Task<object> Get(GetDashboardConfigurationPage request)
         {
             var page = ServerEntryPoint.Instance.PluginConfigurationPages.First(p => p.Name.Equals(request.Name, StringComparison.OrdinalIgnoreCase));
 
             return ResultFactory.GetStaticResult(Request, page.Plugin.Version.ToString().GetMD5(), null, null, MimeTypes.GetMimeType("page.html"), () => GetPackageCreator().ModifyHtml("dummy.html", page.GetHtmlStream(), null, _appHost.ApplicationVersion.ToString(), null, false));
+        }
+
+        public object Get(GetCacheFiles request)
+        {
+            var allFiles = GetCacheFileList();
+
+            return ResultFactory.GetOptimizedResult(Request, _jsonSerializer.SerializeToString(allFiles));
+        }
+
+        private List<string> GetCacheFileList()
+        {
+            var creator = GetPackageCreator();
+            var directory = creator.DashboardUIPath;
+
+            var skipExtensions = GetDeployIgnoreExtensions();
+            var skipNames = GetDeployIgnoreFilenames();
+
+            return
+                Directory.GetFiles(directory, "*", SearchOption.AllDirectories)
+                .Where(i => !skipExtensions.Contains(Path.GetExtension(i) ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+                .Where(i => !skipNames.Any(s =>
+                {
+                    if (s.Item2)
+                    {
+                        return string.Equals(s.Item1, Path.GetFileName(i), StringComparison.OrdinalIgnoreCase);
+                    }
+
+                    return (Path.GetFileName(i) ?? string.Empty).IndexOf(s.Item1, StringComparison.OrdinalIgnoreCase) != -1;
+                }))
+                .Select(i => i.Replace(directory, string.Empty, StringComparison.OrdinalIgnoreCase).Replace("\\", "/").TrimStart('/') + "?v=" + _appHost.ApplicationVersion.ToString())
+                .ToList();
         }
 
         /// <summary>
@@ -201,7 +237,7 @@ namespace MediaBrowser.WebDashboard.Api
         /// </summary>
         /// <param name="request">The request.</param>
         /// <returns>System.Object.</returns>
-        public object Get(GetDashboardResource request)
+        public async Task<object> Get(GetDashboardResource request)
         {
             var path = request.ResourceName;
 
@@ -230,7 +266,8 @@ namespace MediaBrowser.WebDashboard.Api
                 !contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) &&
                 !contentType.StartsWith("font/", StringComparison.OrdinalIgnoreCase))
             {
-                return ResultFactory.GetResult(GetResourceStream(path, localizationCulture).Result, contentType);
+                var stream = await GetResourceStream(path, localizationCulture).ConfigureAwait(false);
+                return ResultFactory.GetResult(stream, contentType);
             }
 
             TimeSpan? cacheDuration = null;
@@ -246,7 +283,7 @@ namespace MediaBrowser.WebDashboard.Api
 
             var cacheKey = (assembly.Version + (localizationCulture ?? string.Empty) + path).GetMD5();
 
-            return ResultFactory.GetStaticResult(Request, cacheKey, null, cacheDuration, contentType, () => GetResourceStream(path, localizationCulture));
+            return await ResultFactory.GetStaticResult(Request, cacheKey, null, cacheDuration, contentType, () => GetResourceStream(path, localizationCulture)).ConfigureAwait(false);
         }
 
         private string GetLocalizationCulture()
@@ -273,6 +310,43 @@ namespace MediaBrowser.WebDashboard.Api
             return new PackageCreator(_fileSystem, _localization, Logger, _serverConfigurationManager, _jsonSerializer);
         }
 
+        private List<string> GetDeployIgnoreExtensions()
+        {
+            var list = new List<string>();
+
+            list.Add(".log");
+            list.Add(".txt");
+            list.Add(".map");
+            list.Add(".md");
+            list.Add(".gz");
+            list.Add(".bat");
+            list.Add(".sh");
+
+            return list;
+        }
+
+        private List<Tuple<string,bool>> GetDeployIgnoreFilenames()
+        {
+            var list = new List<Tuple<string, bool>>();
+
+            list.Add(new Tuple<string, bool>("copying", true));
+            list.Add(new Tuple<string, bool>("license", true));
+            list.Add(new Tuple<string, bool>("license-mit", true));
+            list.Add(new Tuple<string, bool>("gitignore", false));
+            list.Add(new Tuple<string, bool>("npmignore", false));
+            list.Add(new Tuple<string, bool>("jshintrc", false));
+            list.Add(new Tuple<string, bool>("gruntfile", false));
+            list.Add(new Tuple<string, bool>("bowerrc", false));
+            list.Add(new Tuple<string, bool>("jscsrc", false));
+            list.Add(new Tuple<string, bool>("hero.svg", false));
+            list.Add(new Tuple<string, bool>("travis.yml", false));
+            list.Add(new Tuple<string, bool>("build.js", false));
+            list.Add(new Tuple<string, bool>("editorconfig", false));
+            list.Add(new Tuple<string, bool>("gitattributes", false));
+
+            return list;
+        }
+
         public async Task<object> Get(GetDashboardPackage request)
         {
             var path = Path.Combine(_serverConfigurationManager.ApplicationPaths.ProgramDataPath,
@@ -295,45 +369,19 @@ namespace MediaBrowser.WebDashboard.Api
 
             var appVersion = _appHost.ApplicationVersion.ToString();
 
-            var mode = request.Mode;
+            File.WriteAllText(Path.Combine(path, "staticfiles"), _jsonSerializer.SerializeToString(GetCacheFileList()));
 
-            if (string.Equals(mode, "cordova", StringComparison.OrdinalIgnoreCase))
-            {
-                _fileSystem.DeleteFile(Path.Combine(path, "scripts", "registrationservices.js"));
-            }
+            var mode = request.Mode;
 
             // Try to trim the output size a bit
             var bowerPath = Path.Combine(path, "bower_components");
 
-            if (!string.Equals(mode, "cordova", StringComparison.OrdinalIgnoreCase))
-            {
-                //var versionedBowerPath = Path.Combine(Path.GetDirectoryName(bowerPath), "bower_components" + _appHost.ApplicationVersion);
-                //Directory.Move(bowerPath, versionedBowerPath);
-                //bowerPath = versionedBowerPath;
-            }
+            GetDeployIgnoreExtensions().ForEach(i => DeleteFilesByExtension(bowerPath, i));
 
-            DeleteFilesByExtension(bowerPath, ".log");
-            DeleteFilesByExtension(bowerPath, ".txt");
-            DeleteFilesByExtension(bowerPath, ".map");
-            DeleteFilesByExtension(bowerPath, ".md");
-            DeleteFilesByExtension(bowerPath, ".json");
-            DeleteFilesByExtension(bowerPath, ".gz");
-            DeleteFilesByExtension(bowerPath, ".bat");
-            DeleteFilesByExtension(bowerPath, ".sh");
-            DeleteFilesByName(bowerPath, "copying", true);
-            DeleteFilesByName(bowerPath, "license", true);
-            DeleteFilesByName(bowerPath, "license-mit", true);
-            DeleteFilesByName(bowerPath, "gitignore");
-            DeleteFilesByName(bowerPath, "npmignore");
-            DeleteFilesByName(bowerPath, "jshintrc");
-            DeleteFilesByName(bowerPath, "gruntfile");
-            DeleteFilesByName(bowerPath, "bowerrc");
-            DeleteFilesByName(bowerPath, "jscsrc");
-            DeleteFilesByName(bowerPath, "hero.svg");
-            DeleteFilesByName(bowerPath, "travis.yml");
-            DeleteFilesByName(bowerPath, "build.js");
-            DeleteFilesByName(bowerPath, "editorconfig");
-            DeleteFilesByName(bowerPath, "gitattributes");
+            DeleteFilesByExtension(bowerPath, ".json", "strings\\");
+
+            GetDeployIgnoreFilenames().ForEach(i => DeleteFilesByName(bowerPath, i.Item1, i.Item2));
+
             DeleteFoldersByName(bowerPath, "demo");
             DeleteFoldersByName(bowerPath, "test");
             DeleteFoldersByName(bowerPath, "guides");
@@ -342,33 +390,25 @@ namespace MediaBrowser.WebDashboard.Api
 
             if (string.Equals(mode, "cordova", StringComparison.OrdinalIgnoreCase))
             {
-                DeleteFoldersByName(Path.Combine(bowerPath, "emby-webcomponents"), "fonts");
+                DeleteFoldersByName(Path.Combine(bowerPath, "emby-webcomponents", "fonts"), "montserrat");
+                DeleteFoldersByName(Path.Combine(bowerPath, "emby-webcomponents", "fonts"), "opensans");
+                DeleteFoldersByName(Path.Combine(bowerPath, "emby-webcomponents", "fonts"), "roboto");
             }
 
             _fileSystem.DeleteDirectory(Path.Combine(bowerPath, "jquery", "src"), true);
-          
+
             DeleteCryptoFiles(Path.Combine(bowerPath, "cryptojslib", "components"));
 
             DeleteFoldersByName(Path.Combine(bowerPath, "jquery"), "src");
             DeleteFoldersByName(Path.Combine(bowerPath, "jstree"), "src");
-            DeleteFoldersByName(Path.Combine(bowerPath, "Sortable"), "meteor");
-            DeleteFoldersByName(Path.Combine(bowerPath, "Sortable"), "st");
-            DeleteFoldersByName(Path.Combine(bowerPath, "Swiper"), "src");
-            DeleteFoldersByName(Path.Combine(bowerPath, "material-design-lite"), "src");
-            DeleteFoldersByName(Path.Combine(bowerPath, "material-design-lite"), "utils");
-            _fileSystem.DeleteFile(Path.Combine(bowerPath, "material-design-lite", "gulpfile.babel.js"));
+            //DeleteFoldersByName(Path.Combine(bowerPath, "Sortable"), "meteor");
+            //DeleteFoldersByName(Path.Combine(bowerPath, "Sortable"), "st");
+            //DeleteFoldersByName(Path.Combine(bowerPath, "Swiper"), "src");
 
-            _fileSystem.DeleteDirectory(Path.Combine(bowerPath, "marked"), true);
-            _fileSystem.DeleteDirectory(Path.Combine(bowerPath, "marked-element"), true);
-            _fileSystem.DeleteDirectory(Path.Combine(bowerPath, "prism"), true);
-            _fileSystem.DeleteDirectory(Path.Combine(bowerPath, "prism-element"), true);
-           
             if (string.Equals(mode, "cordova", StringComparison.OrdinalIgnoreCase))
             {
                 // Delete things that are unneeded in an attempt to keep the output as trim as possible
                 _fileSystem.DeleteDirectory(Path.Combine(path, "css", "images", "tour"), true);
-
-                _fileSystem.DeleteFile(Path.Combine(path, "thirdparty", "jquerymobile-1.4.5", "jquery.mobile-1.4.5.min.map"));
             }
             else
             {
@@ -399,7 +439,7 @@ namespace MediaBrowser.WebDashboard.Api
             }
         }
 
-        private void DeleteFilesByExtension(string path, string extension)
+        private void DeleteFilesByExtension(string path, string extension, string exclude = null)
         {
             var files = _fileSystem.GetFiles(path, true)
                 .Where(i => string.Equals(i.Extension, extension, StringComparison.OrdinalIgnoreCase))
@@ -407,6 +447,13 @@ namespace MediaBrowser.WebDashboard.Api
 
             foreach (var file in files)
             {
+                if (!string.IsNullOrWhiteSpace(exclude))
+                {
+                    if (file.FullName.IndexOf(exclude, StringComparison.OrdinalIgnoreCase) != -1)
+                    {
+                        continue;
+                    }
+                }
                 _fileSystem.DeleteFile(file.FullName);
             }
         }
@@ -514,18 +561,6 @@ namespace MediaBrowser.WebDashboard.Api
                 var filename = Path.GetFileName(file);
 
                 await DumpFile(filename, Path.Combine(destination, filename), mode, culture, appVersion).ConfigureAwait(false);
-            }
-
-            var excludeFiles = new List<string>();
-
-            if (string.Equals(mode, "cordova", StringComparison.OrdinalIgnoreCase))
-            {
-                excludeFiles.Add("supporterkey.html");
-            }
-
-            foreach (var file in excludeFiles)
-            {
-                _fileSystem.DeleteFile(Path.Combine(destination, file));
             }
         }
 

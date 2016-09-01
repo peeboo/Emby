@@ -1,18 +1,8 @@
-﻿define(['libraryBrowser', 'scripts/alphapicker', 'scrollStyles'], function (libraryBrowser) {
+﻿define(['libraryBrowser', 'components/categorysyncbuttons', 'cardBuilder', 'scrollStyles', 'emby-itemscontainer', 'emby-tabs', 'emby-button'], function (libraryBrowser, categorysyncbuttons, cardBuilder) {
 
     return function (view, params) {
 
         var self = this;
-
-        function getView() {
-
-            return 'Thumb';
-        }
-
-        function getResumeView() {
-
-            return 'Poster';
-        }
 
         function reload() {
 
@@ -24,17 +14,13 @@
 
         function loadNextUp() {
 
-            var limit = AppInfo.hasLowImageBandwidth ?
-             16 :
-             24;
-
             var query = {
 
-                Limit: limit,
-                Fields: "PrimaryImageAspectRatio,SeriesInfo,DateCreated,SyncInfo",
+                Limit: 24,
+                Fields: "PrimaryImageAspectRatio,SeriesInfo,DateCreated,BasicSyncInfo",
                 UserId: Dashboard.getCurrentUserId(),
                 ImageTypeLimit: 1,
-                EnableImageTypes: "Primary,Backdrop,Banner,Thumb"
+                EnableImageTypes: "Primary,Backdrop,Thumb"
             };
 
             query.ParentId = LibraryMenu.getTopParentId();
@@ -47,41 +33,19 @@
                     view.querySelector('.noNextUpItems').classList.remove('hide');
                 }
 
-                var viewStyle = getView();
-                var html = '';
+                var container = view.querySelector('#nextUpItems');
+                cardBuilder.buildCards(result.Items, {
+                    itemsContainer: container,
+                    preferThumb: true,
+                    shape: "backdrop",
+                    scalable: true,
+                    showTitle: true,
+                    showParentTitle: true,
+                    overlayText: false,
+                    centerText: true,
+                    overlayPlayButton: AppInfo.enableAppLayouts
+                });
 
-                if (viewStyle == 'ThumbCard') {
-
-                    html += libraryBrowser.getPosterViewHtml({
-                        items: result.Items,
-                        shape: "backdrop",
-                        showTitle: true,
-                        preferThumb: true,
-                        showParentTitle: true,
-                        lazy: true,
-                        cardLayout: true,
-                        showDetailsMenu: true
-                    });
-
-                } else if (viewStyle == 'Thumb') {
-
-                    html += libraryBrowser.getPosterViewHtml({
-                        items: result.Items,
-                        shape: "backdrop",
-                        showTitle: true,
-                        showParentTitle: true,
-                        overlayText: false,
-                        lazy: true,
-                        preferThumb: true,
-                        showDetailsMenu: true,
-                        centerText: true,
-                        overlayPlayButton: AppInfo.enableAppLayouts
-                    });
-                }
-
-                var elem = view.querySelector('#nextUpItems');
-                elem.innerHTML = html;
-                ImageLoader.lazyChildren(elem);
                 Dashboard.hideLoadingMsg();
             });
         }
@@ -108,11 +72,12 @@
                 Filters: "IsResumable",
                 Limit: limit,
                 Recursive: true,
-                Fields: "PrimaryImageAspectRatio,SeriesInfo,UserData,SyncInfo",
+                Fields: "PrimaryImageAspectRatio,SeriesInfo,UserData,BasicSyncInfo",
                 ExcludeLocationTypes: "Virtual",
                 ParentId: parentId,
                 ImageTypeLimit: 1,
-                EnableImageTypes: "Primary,Backdrop,Banner,Thumb"
+                EnableImageTypes: "Primary,Backdrop,Thumb",
+                EnableTotalRecordCount: false
             };
 
             ApiClient.getItems(Dashboard.getCurrentUserId(), options).then(function (result) {
@@ -123,52 +88,39 @@
                     view.querySelector('#resumableSection').classList.add('hide');
                 }
 
-                var viewStyle = getResumeView();
-                var html = '';
+                var allowBottomPadding = !enableScrollX();
 
-                if (viewStyle == 'PosterCard') {
-
-                    html += libraryBrowser.getPosterViewHtml({
-                        items: result.Items,
-                        shape: getThumbShape(),
-                        showTitle: true,
-                        showParentTitle: true,
-                        lazy: true,
-                        cardLayout: true,
-                        showDetailsMenu: true,
-                        preferThumb: true
-                    });
-
-                } else if (viewStyle == 'Poster') {
-
-                    html += libraryBrowser.getPosterViewHtml({
-                        items: result.Items,
-                        shape: getThumbShape(),
-                        showTitle: true,
-                        showParentTitle: true,
-                        lazy: true,
-                        showDetailsMenu: true,
-                        overlayPlayButton: true,
-                        preferThumb: true,
-                        centerText: true
-                    });
-                }
-
-                var elem = view.querySelector('#resumableItems');
-                elem.innerHTML = html;
-                ImageLoader.lazyChildren(elem);
+                var container = view.querySelector('#resumableItems');
+                cardBuilder.buildCards(result.Items, {
+                    itemsContainer: container,
+                    preferThumb: true,
+                    shape: getThumbShape(),
+                    scalable: true,
+                    showTitle: true,
+                    showParentTitle: true,
+                    overlayText: false,
+                    centerText: true,
+                    overlayPlayButton: true,
+                    allowBottomPadding: allowBottomPadding
+                });
             });
         }
 
         self.initTab = function () {
 
             var tabContent = self.tabContent;
+
+            var resumableItemsContainer = tabContent.querySelector('#resumableItems');
+
             if (enableScrollX()) {
-                tabContent.querySelector('#resumableItems').classList.add('hiddenScrollX');
+                resumableItemsContainer.classList.add('hiddenScrollX');
+                resumableItemsContainer.classList.remove('vertical-wrap');
             } else {
-                tabContent.querySelector('#resumableItems').classList.remove('hiddenScrollX');
+                resumableItemsContainer.classList.remove('hiddenScrollX');
+                resumableItemsContainer.classList.add('vertical-wrap');
             }
-            libraryBrowser.createCardMenus(tabContent.querySelector('#resumableItems'));
+
+            categorysyncbuttons.init(tabContent);
         };
 
         self.renderTab = function () {
@@ -178,9 +130,8 @@
         var tabControllers = [];
         var renderedTabs = [];
 
-        function loadTab(page, index) {
+        function getTabController(page, index, callback) {
 
-            var tabContent = page.querySelector('.pageTabContent[data-index=\'' + index + '\']');
             var depends = [];
 
             switch (index) {
@@ -210,12 +161,14 @@
             }
 
             require(depends, function (controllerFactory) {
-
+                var tabContent;
                 if (index == 0) {
+                    tabContent = view.querySelector('.pageTabContent[data-index=\'' + index + '\']');
                     self.tabContent = tabContent;
                 }
                 var controller = tabControllers[index];
                 if (!controller) {
+                    tabContent = view.querySelector('.pageTabContent[data-index=\'' + index + '\']');
                     controller = index ? new controllerFactory(view, params, tabContent) : self;
                     tabControllers[index] = controller;
 
@@ -224,6 +177,24 @@
                     }
                 }
 
+                callback(controller);
+            });
+        }
+
+        function preLoadTab(page, index) {
+
+            getTabController(page, index, function (controller) {
+                if (renderedTabs.indexOf(index) == -1) {
+                    if (controller.preRender) {
+                        controller.preRender();
+                    }
+                }
+            });
+        }
+
+        function loadTab(page, index) {
+
+            getTabController(page, index, function (controller) {
                 if (renderedTabs.indexOf(index) == -1) {
                     renderedTabs.push(index);
                     controller.renderTab();
@@ -231,26 +202,15 @@
             });
         }
 
+        var viewTabs = view.querySelector('.libraryViewNav');
+
         function onPlaybackStop(e, state) {
 
             if (state.NowPlayingItem && state.NowPlayingItem.MediaType == 'Video') {
 
-                var pageTabsContainer = view.querySelector('.pageTabsContainer');
-
-                pageTabsContainer.dispatchEvent(new CustomEvent("tabchange", {
-                    detail: {
-                        selectedTabIndex: libraryBrowser.selectedTab(pageTabsContainer)
-                    }
-                }));
+                renderedTabs = [];
+                viewTabs.triggerTabChange();
             }
-        }
-
-        var pageTabsContainer = view.querySelector('.pageTabsContainer');
-
-        var baseUrl = 'tv.html';
-        var topParentId = params.topParentId;
-        if (topParentId) {
-            baseUrl += '?topParentId=' + topParentId;
         }
 
         if (enableScrollX()) {
@@ -258,13 +218,28 @@
         } else {
             view.querySelector('#resumableItems').classList.remove('hiddenScrollX');
         }
-        libraryBrowser.createCardMenus(view.querySelector('#resumableItems'));
+        libraryBrowser.configurePaperLibraryTabs(view, viewTabs, view.querySelectorAll('.pageTabContent'), [0, 1, 2, 4, 5, 6]);
 
-        libraryBrowser.configurePaperLibraryTabs(view, view.querySelector('paper-tabs'), pageTabsContainer, baseUrl);
-
-        pageTabsContainer.addEventListener('tabchange', function (e) {
+        viewTabs.addEventListener('beforetabchange', function (e) {
+            preLoadTab(view, parseInt(e.detail.selectedTabIndex));
+        });
+        viewTabs.addEventListener('tabchange', function (e) {
             loadTab(view, parseInt(e.detail.selectedTabIndex));
         });
+
+        function onWebSocketMessage(e, data) {
+
+            var msg = data;
+
+            if (msg.MessageType === "UserDataChanged") {
+
+                if (msg.Data.UserId == Dashboard.getCurrentUserId()) {
+
+                    renderedTabs = [];
+                }
+            }
+
+        }
 
         view.addEventListener('viewbeforeshow', function (e) {
 
@@ -288,11 +263,32 @@
             }
 
             Events.on(MediaController, 'playbackstop', onPlaybackStop);
+            Events.on(ApiClient, "websocketmessage", onWebSocketMessage);
         });
 
         view.addEventListener('viewbeforehide', function (e) {
 
             Events.off(MediaController, 'playbackstop', onPlaybackStop);
+            Events.off(ApiClient, "websocketmessage", onWebSocketMessage);
+        });
+
+        if (AppInfo.enableHeadRoom) {
+            require(["headroom-window"], function (headroom) {
+                headroom.add(viewTabs);
+                self.headroom = headroom;
+            });
+        }
+
+        view.addEventListener('viewdestroy', function (e) {
+
+            if (self.headroom) {
+                self.headroom.remove(viewTabs);
+            }
+            tabControllers.forEach(function (t) {
+                if (t.destroy) {
+                    t.destroy();
+                }
+            });
         });
     };
 });

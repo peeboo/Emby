@@ -58,6 +58,7 @@ namespace MediaBrowser.MediaEncoding.Subtitles
             string outputFormat,
             long startTimeTicks,
             long? endTimeTicks,
+            bool preserveOriginalTimestamps,
             CancellationToken cancellationToken)
         {
             var ms = new MemoryStream();
@@ -68,7 +69,7 @@ namespace MediaBrowser.MediaEncoding.Subtitles
 
                 var trackInfo = reader.Parse(stream, cancellationToken);
 
-                FilterEvents(trackInfo, startTimeTicks, endTimeTicks, false);
+                FilterEvents(trackInfo, startTimeTicks, endTimeTicks, preserveOriginalTimestamps);
 
                 var writer = GetWriter(outputFormat);
 
@@ -116,8 +117,18 @@ namespace MediaBrowser.MediaEncoding.Subtitles
             string outputFormat,
             long startTimeTicks,
             long? endTimeTicks,
+            bool preserveOriginalTimestamps,
             CancellationToken cancellationToken)
         {
+            if (string.IsNullOrWhiteSpace(itemId))
+            {
+                throw new ArgumentNullException("itemId");
+            }
+            if (string.IsNullOrWhiteSpace(mediaSourceId))
+            {
+                throw new ArgumentNullException("mediaSourceId");
+            }
+
             var subtitle = await GetSubtitleStream(itemId, mediaSourceId, subtitleStreamIndex, cancellationToken)
                         .ConfigureAwait(false);
 
@@ -130,7 +141,7 @@ namespace MediaBrowser.MediaEncoding.Subtitles
 
             using (var stream = subtitle.Item1)
             {
-                return await ConvertSubtitles(stream, inputFormat, outputFormat, startTimeTicks, endTimeTicks, cancellationToken).ConfigureAwait(false);
+                return await ConvertSubtitles(stream, inputFormat, outputFormat, startTimeTicks, endTimeTicks, preserveOriginalTimestamps, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -139,10 +150,19 @@ namespace MediaBrowser.MediaEncoding.Subtitles
             int subtitleStreamIndex,
             CancellationToken cancellationToken)
         {
+            if (string.IsNullOrWhiteSpace(itemId))
+            {
+                throw new ArgumentNullException("itemId");
+            }
+            if (string.IsNullOrWhiteSpace(mediaSourceId))
+            {
+                throw new ArgumentNullException("mediaSourceId");
+            }
+
             var mediaSources = await _mediaSourceManager.GetPlayackMediaSources(itemId, null, false, new[] { MediaType.Audio, MediaType.Video }, cancellationToken).ConfigureAwait(false);
 
             var mediaSource = mediaSources
-                .First(i => string.Equals(i.Id, mediaSourceId));
+                .First(i => string.Equals(i.Id, mediaSourceId, StringComparison.OrdinalIgnoreCase));
 
             var subtitleStream = mediaSource.MediaStreams
                 .First(i => i.Type == MediaStreamType.Subtitle && i.Index == subtitleStreamIndex);
@@ -453,7 +473,7 @@ namespace MediaBrowser.MediaEncoding.Subtitles
 
                 throw;
             }
-
+            
             var logTask = process.StandardError.BaseStream.CopyToAsync(logFileStream);
 
             var ranToCompletion = process.WaitForExit(60000);
@@ -607,7 +627,8 @@ namespace MediaBrowser.MediaEncoding.Subtitles
                 throw;
             }
 
-            process.StandardError.BaseStream.CopyToAsync(logFileStream);
+            // Important - don't await the log task or we won't be able to kill ffmpeg when the user stops playback
+            Task.Run(() => StartStreamingLog(process.StandardError.BaseStream, logFileStream));
 
             var ranToCompletion = process.WaitForExit(300000);
 
@@ -681,6 +702,33 @@ namespace MediaBrowser.MediaEncoding.Subtitles
             if (string.Equals(outputCodec, "ass", StringComparison.OrdinalIgnoreCase))
             {
                 await SetAssFont(outputPath).ConfigureAwait(false);
+            }
+        }
+
+        private async Task StartStreamingLog(Stream source, Stream target)
+        {
+            try
+            {
+                using (var reader = new StreamReader(source))
+                {
+                    while (!reader.EndOfStream)
+                    {
+                        var line = await reader.ReadLineAsync().ConfigureAwait(false);
+
+                        var bytes = Encoding.UTF8.GetBytes(Environment.NewLine + line);
+
+                        await target.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+                        await target.FlushAsync().ConfigureAwait(false);
+                    }
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                // Don't spam the log. This doesn't seem to throw in windows, but sometimes under linux
+            }
+            catch (Exception ex)
+            {
+                _logger.ErrorException("Error reading ffmpeg log", ex);
             }
         }
 

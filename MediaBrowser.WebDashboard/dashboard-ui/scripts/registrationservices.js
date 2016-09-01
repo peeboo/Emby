@@ -1,4 +1,4 @@
-﻿define(['appStorage', 'jQuery'], function (appStorage, $) {
+﻿define(['appStorage', 'shell'], function (appStorage, shell) {
 
     var supporterPlaybackKey = 'lastSupporterPlaybackMessage4';
 
@@ -51,13 +51,6 @@
                 text: Globalize.translate('MobileSyncFeatureDescription')
             });
         }
-        else if (AppInfo.isNativeApp) {
-            list.push({
-                name: Globalize.translate('HeaderCloudSync'),
-                icon: 'sync',
-                text: Globalize.translate('CloudSyncFeatureDescription')
-            });
-        }
         else {
             list.push({
                 name: Globalize.translate('HeaderCinemaMode'),
@@ -72,47 +65,47 @@
     function getSubscriptionBenefitHtml(item) {
 
         var html = '';
-        html += '<paper-icon-item>';
+        html += '<div class="listItem">';
 
-        html += '<paper-fab mini style="background-color:#52B54B;" icon="' + item.icon + '" item-icon></paper-fab>';
+        html += '<i class="listItemIcon md-icon">' + item.icon + '</i>';
 
-        html += '<paper-item-body three-line>';
+        html += '<div class="listItemBody two-line">';
         html += '<a class="clearLink" href="https://emby.media/premiere" target="_blank">';
 
-        html += '<div>';
+        html += '<h3 class="listItemBodyText">';
         html += item.name;
-        html += '</div>';
+        html += '</h3>';
 
-        html += '<div secondary style="white-space:normal;">';
+        html += '<div class="listItemBodyText secondary" style="white-space:normal;">';
         html += item.text;
         html += '</div>';
 
         html += '</a>';
-        html += '</paper-item-body>';
+        html += '</div>';
 
-        html += '</paper-icon-item>';
+        html += '</div>';
 
         return html;
     }
 
     function showPlaybackOverlay(resolve, reject) {
 
-        require(['dialogHelper', 'paper-fab', 'paper-item-body', 'paper-icon-item'], function (dialogHelper) {
+        require(['dialogHelper', 'listViewStyle', 'emby-button'], function (dialogHelper) {
 
             var dlg = dialogHelper.createDialog({
-                size: 'fullscreen-border'
+                size: 'fullscreen-border',
+                removeOnClose: true
             });
 
             dlg.classList.add('ui-body-b');
             dlg.classList.add('background-theme-b');
-            dlg.classList.add('popupEditor');
 
             var html = '';
             html += '<h2 class="dialogHeader">';
-            html += '<paper-fab icon="arrow-back" mini class="btnCancelSupporterInfo" tabindex="-1"></paper-fab>';
+            html += '<button is="emby-button" type="button" class="fab mini btnCancelSupporterInfo" tabindex="-1"><i class="md-icon">arrow_back</i></button>';
             html += '</h2>';
 
-            html += '<div class="readOnlyContent" style="margin:0 auto 0;color:#fff;padding:1em;">';
+            html += '<div class="readOnlyContent" style="margin:0 auto 0;color:#fff;padding:0 1em 1em;">';
 
             html += '<h1>' + Globalize.translate('HeaderTryEmbyPremiere') + '</h1>';
 
@@ -129,8 +122,8 @@
 
             html += '<br/>';
 
-            html += '<a class="clearLink" href="http://emby.media/premiere" target="_blank"><paper-button raised class="submit block" autoFocus><iron-icon icon="check"></iron-icon><span>' + Globalize.translate('ButtonBecomeSupporter') + '</span></paper-button></a>';
-            html += '<paper-button raised class="subdued block btnCancelSupporterInfo" style="background:#444;"><iron-icon icon="close"></iron-icon><span>' + Globalize.translate('ButtonClosePlayVideo') + '</span></paper-button>';
+            html += '<a class="clearLink" href="http://emby.media/premiere" target="_blank"><button is="emby-button" type="button" class="raised submit block" autoFocus><i class="md-icon">check</i><span>' + Globalize.translate('ButtonBecomeSupporter') + '</span></button></a>';
+            html += '<button is="emby-button" type="button" class="raised subdued block btnCancelSupporterInfo" style="background:#444;"><i class="md-icon">close</i><span>' + Globalize.translate('ButtonClosePlayVideo') + '</span></button>';
 
             html += '</div>';
 
@@ -140,15 +133,19 @@
             // Has to be assigned a z-index after the call to .open() 
             dlg.addEventListener('close', function (e) {
                 appStorage.setItem(supporterPlaybackKey, new Date().getTime());
-                dlg.parentNode.removeChild(dlg);
                 resolve();
             });
 
             dialogHelper.open(dlg);
 
-            $('.btnCancelSupporterInfo').on('click', function () {
+            var onCancelClick = function () {
                 dialogHelper.close(dlg);
-            });
+            };
+            var i, length;
+            var elems = dlg.querySelectorAll('.btnCancelSupporterInfo');
+            for (i = 0, length = elems.length; i < length; i++) {
+                elems[i].addEventListener('click', onCancelClick);
+            }
         });
     }
 
@@ -191,96 +188,7 @@
         });
     }
 
-    window.RegistrationServices = {
-
-        renderPluginInfo: function (page, pkg, pluginSecurityInfo) {
-
-            if (pkg.isPremium) {
-                $('.premiumPackage', page).show();
-
-                // Fill in registration info
-                var regStatus = "";
-                if (pkg.isRegistered) {
-
-                    regStatus += "<p style='color:green;'>";
-
-                    regStatus += Globalize.translate('MessageFeatureIncludedWithSupporter');
-
-                } else {
-
-                    var expDateTime = new Date(pkg.expDate).getTime();
-                    var nowTime = new Date().getTime();
-
-                    if (expDateTime <= nowTime) {
-                        regStatus += "<p style='color:red;'>";
-                        regStatus += Globalize.translate('MessageTrialExpired');
-                    }
-                    else if (expDateTime > new Date(1970, 1, 1).getTime()) {
-
-                        regStatus += "<p style='color:blue;'>";
-                        regStatus += Globalize.translate('MessageTrialWillExpireIn').replace('{0}', Math.round(expDateTime - nowTime) / (86400000));
-                    }
-                }
-
-                regStatus += "</p>";
-                $('#regStatus', page).html(regStatus);
-
-                if (pluginSecurityInfo.IsMBSupporter) {
-                    $('#regInfo', page).html(pkg.regInfo || "");
-
-                    $('.premiumDescription', page).hide();
-                    $('.supporterDescription', page).hide();
-
-                    if (pkg.price > 0) {
-
-                        $('.premiumHasPrice', page).show();
-                        $('#featureId', page).val(pkg.featureId);
-                        $('#featureName', page).val(pkg.name);
-                        $('#amount', page).val(pkg.price);
-
-                        $('#regPrice', page).html("<h3>" + Globalize.translate('ValuePriceUSD').replace('{0}', "$" + pkg.price.toFixed(2)) + "</h3>");
-                        $('#ppButton', page).hide();
-
-                        var url = "https://mb3admin.com/admin/service/user/getPayPalEmail?id=" + pkg.owner;
-
-                        fetch(url).then(function (response) {
-
-                            return response.json();
-
-                        }).then(function (dev) {
-
-                            if (dev.payPalEmail) {
-                                $('#payPalEmail', page).val(dev.payPalEmail);
-                                $('#ppButton', page).show();
-
-                            }
-                        });
-
-                    } else {
-                        // Supporter-only feature
-                        $('.premiumHasPrice', page).hide();
-                    }
-                } else {
-
-                    if (pkg.price) {
-                        $('.premiumDescription', page).show();
-                        $('.supporterDescription', page).hide();
-                        $('#regInfo', page).html("");
-
-                    } else {
-                        $('.premiumDescription', page).hide();
-                        $('.supporterDescription', page).show();
-                        $('#regInfo', page).html("");
-                    }
-
-                    $('#ppButton', page).hide();
-                }
-
-            } else {
-                $('.premiumPackage', page).hide();
-            }
-        },
-
+    return {
         validateFeature: function (name) {
 
             return new Promise(function (resolve, reject) {
@@ -294,7 +202,10 @@
                     resolve();
                 }
             });
+        },
+
+        showPremiereInfo: function () {
+            shell.openUrl('https://emby.media/premiere');
         }
     };
-
 });

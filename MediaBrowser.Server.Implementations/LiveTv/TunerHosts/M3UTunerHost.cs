@@ -134,17 +134,24 @@ namespace MediaBrowser.Server.Implementations.LiveTv.TunerHosts
                         }
                     },
                     RequiresOpening = false,
-                    RequiresClosing = false
+                    RequiresClosing = false,
+
+                    ReadAtNativeFramerate = false
                 };
 
                 return new List<MediaSourceInfo> { mediaSource };
             }
-            return new List<MediaSourceInfo> { };
+            return new List<MediaSourceInfo>();
         }
 
         protected override Task<bool> IsAvailableInternal(TunerHostInfo tuner, string channelId, CancellationToken cancellationToken)
         {
             return Task.FromResult(true);
+        }
+
+        public string ApplyDuration(string streamPath, TimeSpan duration)
+        {
+            return streamPath;
         }
     }
 }

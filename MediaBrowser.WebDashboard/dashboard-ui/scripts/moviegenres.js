@@ -1,4 +1,4 @@
-﻿define(['jQuery'], function ($) {
+﻿define(['libraryBrowser', 'cardBuilder'], function (libraryBrowser, cardBuilder) {
 
     return function (view, params, tabContent) {
 
@@ -16,15 +16,14 @@
                         SortOrder: "Ascending",
                         IncludeItemTypes: "Movie",
                         Recursive: true,
-                        Fields: "DateCreated,SyncInfo,ItemCounts",
-                        StartIndex: 0,
-                        Limit: LibraryBrowser.getDefaultPageSize()
+                        Fields: "DateCreated,ItemCounts,PrimaryImageAspectRatio",
+                        StartIndex: 0
                     },
-                    view: LibraryBrowser.getSavedView(key) || LibraryBrowser.getDefaultItemsView('Thumb', 'Thumb')
+                    view: libraryBrowser.getSavedView(key) || 'Thumb'
                 };
 
                 pageData.query.ParentId = params.topParentId;
-                LibraryBrowser.loadSavedQueryValues(key, pageData.query);
+                libraryBrowser.loadSavedQueryValues(key, pageData.query);
             }
             return pageData;
         }
@@ -36,106 +35,121 @@
 
         function getSavedQueryKey() {
 
-            return LibraryBrowser.getSavedQueryKey('genres');
+            return libraryBrowser.getSavedQueryKey('genres');
         }
 
-        function reloadItems(context) {
+        function getPromise() {
 
             Dashboard.showLoadingMsg();
             var query = getQuery();
 
-            ApiClient.getGenres(Dashboard.getCurrentUserId(), query).then(function (result) {
+            return ApiClient.getGenres(Dashboard.getCurrentUserId(), query);
+        }
 
-                // Scroll back up so they can see the results from the beginning
-                window.scrollTo(0, 0);
+        function reloadItems(context, promise) {
+
+            var query = getQuery();
+
+            promise.then(function (result) {
 
                 var html = '';
 
-                var viewStyle = getPageData().view;
-
-                $('.listTopPaging', context).html(LibraryBrowser.getQueryPagingHtml({
-                    startIndex: query.StartIndex,
-                    limit: query.Limit,
-                    totalRecordCount: result.TotalRecordCount,
-                    viewButton: false,
-                    showLimit: false,
-                    updatePageSizeSetting: false,
-                    addLayoutButton: true,
-                    currentLayout: viewStyle
-                }));
+                var viewStyle = self.getCurrentViewStyle();
+                var elem = context.querySelector('#items');
 
                 if (viewStyle == "Thumb") {
-                    html = LibraryBrowser.getPosterViewHtml({
-                        items: result.Items,
+                    cardBuilder.buildCards(result.Items, {
+                        itemsContainer: elem,
                         shape: "backdrop",
                         preferThumb: true,
+                        showTitle: true,
+                        scalable: true,
                         showItemCounts: true,
                         centerText: true,
-                        lazy: true,
-                        overlayPlayButton: true
+                        overlayMoreButton: true
                     });
                 }
                 else if (viewStyle == "ThumbCard") {
 
-                    html = LibraryBrowser.getPosterViewHtml({
-                        items: result.Items,
+                    cardBuilder.buildCards(result.Items, {
+                        itemsContainer: elem,
                         shape: "backdrop",
                         preferThumb: true,
-                        showItemCounts: true,
-                        cardLayout: true,
                         showTitle: true,
-                        lazy: true
+                        scalable: true,
+                        showItemCounts: true,
+                        centerText: true,
+                        cardLayout: true
                     });
                 }
                 else if (viewStyle == "PosterCard") {
-                    html = LibraryBrowser.getPosterViewHtml({
-                        items: result.Items,
-                        shape: "portrait",
+                    cardBuilder.buildCards(result.Items, {
+                        itemsContainer: elem,
+                        shape: "auto",
+                        showTitle: true,
+                        scalable: true,
                         showItemCounts: true,
-                        lazy: true,
-                        cardLayout: true,
-                        showTitle: true
+                        centerText: true,
+                        cardLayout: true
                     });
                 }
                 else if (viewStyle == "Poster") {
-                    html = LibraryBrowser.getPosterViewHtml({
-                        items: result.Items,
-                        shape: "portrait",
-                        centerText: true,
+                    cardBuilder.buildCards(result.Items, {
+                        itemsContainer: elem,
+                        shape: "auto",
+                        showTitle: true,
+                        scalable: true,
                         showItemCounts: true,
-                        lazy: true,
-                        overlayPlayButton: true
+                        centerText: true,
+                        overlayMoreButton: true
                     });
                 }
 
-                var elem = context.querySelector('.itemsContainer');
-                elem.innerHTML = html;
-                ImageLoader.lazyChildren(elem);
-
-                $('.btnNextPage', context).on('click', function () {
-                    query.StartIndex += query.Limit;
-                    reloadItems(context);
-                });
-
-                $('.btnPreviousPage', context).on('click', function () {
-                    query.StartIndex -= query.Limit;
-                    reloadItems(context);
-                });
-
-                $('.btnChangeLayout', context).on('layoutchange', function (e, layout) {
-                    getPageData().view = layout;
-                    LibraryBrowser.saveViewSetting(getSavedQueryKey(), layout);
-                    reloadItems(context);
-                });
-
-                LibraryBrowser.saveQueryValues(getSavedQueryKey(), query);
+                libraryBrowser.saveQueryValues(getSavedQueryKey(), query);
 
                 Dashboard.hideLoadingMsg();
             });
         }
-        self.renderTab = function () {
-
-            reloadItems(tabContent);
+        self.getViewStyles = function () {
+            return 'Poster,PosterCard,Thumb,ThumbCard'.split(',');
         };
+
+        self.getCurrentViewStyle = function () {
+            return getPageData(tabContent).view;
+        };
+
+        self.setCurrentViewStyle = function (viewStyle) {
+            getPageData(tabContent).view = viewStyle;
+            libraryBrowser.saveViewSetting(getSavedQueryKey(tabContent), viewStyle);
+            fullyReload();
+        };
+
+        self.enableViewSelection = true;
+        var promise;
+
+        self.preRender = function () {
+            promise = getPromise();
+        };
+
+        self.renderTab = function () {
+
+            reloadItems(tabContent, promise);
+        };
+
+        function fullyReload() {
+            self.preRender();
+            self.renderTab();
+        }
+
+        var btnSelectView = tabContent.querySelector('.btnSelectView');
+        btnSelectView.addEventListener('click', function (e) {
+
+            libraryBrowser.showLayoutMenu(e.target, self.getCurrentViewStyle(), self.getViewStyles());
+        });
+
+        btnSelectView.addEventListener('layoutchange', function (e) {
+
+            self.setCurrentViewStyle(e.detail.viewStyle);
+        });
     };
 });

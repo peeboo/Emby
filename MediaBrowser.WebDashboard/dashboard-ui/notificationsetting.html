@@ -1,21 +1,21 @@
-﻿<div id="notificationSettingPage" data-role="page" class="page type-interior notificationConfigurationPage" data-helpurl="https://github.com/MediaBrowser/Wiki/wiki/Notifications" data-require="scripts/notificationsetting,paper-input,jqmcheckbox">
+﻿<div id="notificationSettingPage" data-role="page" class="page type-interior notificationConfigurationPage withTabs" data-helpurl="https://github.com/MediaBrowser/Wiki/wiki/Notifications" data-require="scripts/notificationsetting,emby-select,emby-input,paper-checkbox,emby-button">
 
     <div data-role="content">
         <div class="content-primary">
 
-            <h2 class="notificationType" style="margin-bottom: 0;"></h2>
+            <h1 class="notificationType" style="margin-top:0;"></h1>
 
             <form class="notificationSettingForm">
 
-                <ul data-role="listview" class="ulForm">
-                    <li>
-                        <input type="checkbox" id="chkEnabled" data-mini="true" />
-                        <label for="chkEnabled">${LabelNotificationEnabled}</label>
-                    </li>
-                </ul>
+                <br />
+                <div>
+                    <paper-checkbox id="chkEnabled">${LabelNotificationEnabled}</paper-checkbox>
+                </div>
+                <br />
+                <br />
 
                 <div class="monitorUsers" style="display: none;">
-                    <label>${LabelMonitorUsers}</label>
+                    <div class="paperListLabel">${LabelMonitorUsers}</div>
                     <div class="monitorUsersList">
                     </div>
                     <br />
@@ -23,9 +23,8 @@
                 </div>
 
                 <div>
-                    <div>
-                        <label for="selectUsers" class="selectLabel">${LabelSendNotificationToUsers}</label>
-                        <select id="selectUsers">
+                    <div class="selectContainer">
+                        <select is="emby-select" id="selectUsers" label="${LabelSendNotificationToUsers}">
                             <option value="All">${OptionAllUsers}</option>
                             <option value="Admins">${OptionAdminUsers}</option>
                             <option value="Custom">${OptionCustomUsers}</option>
@@ -38,7 +37,6 @@
                         </div>
                     </div>
                     <br />
-                    <br />
                 </div>
 
                 <div>
@@ -50,24 +48,19 @@
                 </div>
 
                 <br />
-                <ul data-role="listview" class="ulForm">
-                    <li>
-                        <paper-input id="txtTitle" type="text" required label="${LabelMessageTitle}"></paper-input>
-                        <div class="fieldDescription tokenHelp">
-                            <div>${LabelAvailableTokens}</div>
-                            <div class="tokenList" style="margin-top: .5em;"></div>
-                        </div>
-                    </li>
-                    <li>
-                        <br />
-                        <button type="submit" data-role="none" class="clearButton">
-                            <paper-button raised class="submit block"><iron-icon icon="check"></iron-icon><span>${ButtonSave}</span></paper-button>
-                        </button>
+                <div class="inputContainer">
+                    <input is="emby-input" id="txtTitle" type="text" required label="${LabelMessageTitle}"/>
+                    <div class="fieldDescription tokenHelp">
+                        <div>${LabelAvailableTokens}</div>
+                        <div class="tokenList" style="margin-top: .5em;"></div>
+                    </div>
+                </div>
+                <div>
+                    <br />
+                    <button is="emby-button" type="submit" class="raised submit block"><i class="md-icon">check</i><span>${ButtonSave}</span></button>
 
-                        <paper-button raised class="cancel block btnCancel" onclick="history.back();"><iron-icon icon="close"></iron-icon><span>${ButtonCancel}</span></paper-button>
-                    </li>
-
-                </ul>
+                    <button is="emby-button" type="button" class="raised cancel block btnCancel" onclick="history.back();"><i class="md-icon">close</i><span>${ButtonCancel}</span></button>
+                </div>
             </form>
 
         </div>

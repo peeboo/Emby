@@ -11,13 +11,12 @@ namespace MediaBrowser.Controller.Entities
     /// </summary>
     public class Year : BaseItem, IItemByName
     {
-        /// <summary>
-        /// Gets the user data key.
-        /// </summary>
-        /// <returns>System.String.</returns>
-        protected override string CreateUserDataKey()
+        public override List<string> GetUserDataKeys()
         {
-            return "Year-" + Name;
+            var list = base.GetUserDataKeys();
+
+            list.Insert(0, "Year-" + Name);
+            return list;
         }
 
         /// <summary>
@@ -71,6 +70,22 @@ namespace MediaBrowser.Controller.Entities
             return inputItems.Where(i => i.ProductionYear.HasValue && i.ProductionYear.Value == year);
         }
 
+        public IEnumerable<BaseItem> GetTaggedItems(InternalItemsQuery query)
+        {
+            int year;
+
+            var usCulture = new CultureInfo("en-US");
+
+            if (!int.TryParse(Name, NumberStyles.Integer, usCulture, out year))
+            {
+                return new List<BaseItem>();
+            }
+
+            query.Years = new[] { year };
+
+            return LibraryManager.GetItemList(query);
+        }
+
         public int? GetYearValue()
         {
             int i;
@@ -96,6 +111,49 @@ namespace MediaBrowser.Controller.Entities
             {
                 return false;
             }
+        }
+
+        public static string GetPath(string name, bool normalizeName = true)
+        {
+            // Trim the period at the end because windows will have a hard time with that
+            var validName = normalizeName ?
+                FileSystem.GetValidFilename(name).Trim().TrimEnd('.') :
+                name;
+
+            return System.IO.Path.Combine(ConfigurationManager.ApplicationPaths.YearPath, validName);
+        }
+
+        private string GetRebasedPath()
+        {
+            return GetPath(System.IO.Path.GetFileName(Path), false);
+        }
+
+        public override bool RequiresRefresh()
+        {
+            var newPath = GetRebasedPath();
+            if (!string.Equals(Path, newPath, StringComparison.Ordinal))
+            {
+                Logger.Debug("{0} path has changed from {1} to {2}", GetType().Name, Path, newPath);
+                return true;
+            }
+            return base.RequiresRefresh();
+        }
+
+        /// <summary>
+        /// This is called before any metadata refresh and returns true or false indicating if changes were made
+        /// </summary>
+        public override bool BeforeMetadataRefresh()
+        {
+            var hasChanges = base.BeforeMetadataRefresh();
+
+            var newPath = GetRebasedPath();
+            if (!string.Equals(Path, newPath, StringComparison.Ordinal))
+            {
+                Path = newPath;
+                hasChanges = true;
+            }
+
+            return hasChanges;
         }
     }
 }

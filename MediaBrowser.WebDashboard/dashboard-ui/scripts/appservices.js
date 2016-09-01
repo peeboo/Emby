@@ -43,11 +43,13 @@
             installedPlugins = installedPlugins.filter(function (i) {
 
                 var catalogEntry = availablePlugins.filter(function (a) {
-                    return a.guid == i.Id;
+                    return (a.guid || '').toLowerCase() == (i.Id || '').toLowerCase();
                 })[0];
 
-                return catalogEntry && catalogEntry.category == category;
-
+                if (catalogEntry) {
+                    return catalogEntry.category == category;
+                }
+                return false;
             });
 
             PluginsPage.renderPlugins(page, installedPlugins);

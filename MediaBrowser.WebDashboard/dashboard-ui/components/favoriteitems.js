@@ -1,4 +1,4 @@
-﻿define(['libraryBrowser', 'scrollStyles'], function (libraryBrowser) {
+﻿define(['libraryBrowser', 'cardBuilder', 'dom', 'scrollStyles', 'emby-itemscontainer'], function (libraryBrowser, cardBuilder, dom) {
 
     function enableScrollX() {
         return browserInfo.mobile && AppInfo.enableAppLayouts;
@@ -25,22 +25,23 @@
             { name: 'HeaderFavoriteGames', types: "Game", id: "favoriteGames", shape: getSquareShape(), preferThumb: false, showTitle: true },
             { name: 'HeaderFavoriteArtists', types: "MusicArtist", id: "favoriteArtists", shape: getSquareShape(), preferThumb: false, showTitle: true, overlayText: false, showParentTitle: true, centerText: true, overlayPlayButton: true },
             { name: 'HeaderFavoriteAlbums', types: "MusicAlbum", id: "favoriteAlbums", shape: getSquareShape(), preferThumb: false, showTitle: true, overlayText: false, showParentTitle: true, centerText: true, overlayPlayButton: true },
-            { name: 'HeaderFavoriteSongs', types: "Audio", id: "favoriteSongs", shape: getSquareShape(), preferThumb: false, showTitle: true, overlayText: false, showParentTitle: true, centerText: true, overlayMoreButton: true, defaultAction: 'instantmix' }
+            { name: 'HeaderFavoriteSongs', types: "Audio", id: "favoriteSongs", shape: getSquareShape(), preferThumb: false, showTitle: true, overlayText: false, showParentTitle: true, centerText: true, overlayMoreButton: true, action: 'instantmix' }
         ];
     }
 
     function loadSection(elem, userId, topParentId, section, isSingleSection) {
 
-        var screenWidth = window.innerWidth;
+        var screenWidth = dom.getWindowSize().innerWidth;
         var options = {
 
             SortBy: "SortName",
             SortOrder: "Ascending",
             Filters: "IsFavorite",
             Recursive: true,
-            Fields: "PrimaryImageAspectRatio,SyncInfo",
+            Fields: "PrimaryImageAspectRatio,BasicSyncInfo",
             CollapseBoxSetItems: false,
-            ExcludeLocationTypes: "Virtual"
+            ExcludeLocationTypes: "Virtual",
+            EnableTotalRecordCount: false
         };
 
         if (topParentId) {
@@ -51,7 +52,7 @@
             options.Limit = screenWidth >= 1920 ? 10 : (screenWidth >= 1440 ? 8 : 6);
 
             if (enableScrollX()) {
-                options.Limit = 16;
+                options.Limit = 20;
             }
         }
 
@@ -73,34 +74,32 @@
                 html += '<div>';
                 html += '<h1 style="display:inline-block; vertical-align:middle;" class="listHeader">' + Globalize.translate(section.name) + '</h1>';
 
-                if (result.TotalRecordCount > result.Items.length) {
+                if (options.Limit && result.Items.length >= options.Limit) {
                     var href = "secondaryitems.html?type=" + section.types + "&filters=IsFavorite&titlekey=" + section.name;
 
-                    html += '<a class="clearLink" href="' + href + '" style="margin-left:2em;"><paper-button raised class="more mini">' + Globalize.translate('ButtonMore') + '</paper-button></a>';
+                    html += '<a class="clearLink" href="' + href + '" style="margin-left:2em;"><button is="emby-button" type="button" class="raised more mini">' + Globalize.translate('ButtonMore') + '</button></a>';
                 }
 
                 html += '</div>';
 
                 if (enableScrollX()) {
-                    html += '<div class="itemsContainer hiddenScrollX">';
+                    html += '<div is="emby-itemscontainer" class="itemsContainer hiddenScrollX">';
                 } else {
-                    html += '<div class="itemsContainer">';
+                    html += '<div is="emby-itemscontainer" class="itemsContainer vertical-wrap">';
                 }
 
-                html += libraryBrowser.getPosterViewHtml({
-                    items: result.Items,
+                html += cardBuilder.getCardsHtml(result.Items, {
                     preferThumb: section.preferThumb,
                     shape: section.shape,
+                    centerText: section.centerText,
                     overlayText: section.overlayText !== false,
                     showTitle: section.showTitle,
                     showParentTitle: section.showParentTitle,
-                    lazy: true,
-                    showDetailsMenu: true,
-                    centerText: section.centerText,
+                    scalable: true,
                     overlayPlayButton: section.overlayPlayButton,
                     overlayMoreButton: section.overlayMoreButton,
-                    context: 'home-favorites',
-                    defaultAction: section.defaultAction
+                    action: section.action,
+                    allowBottomPadding: !enableScrollX()
                 });
 
                 html += '</div>';
@@ -108,7 +107,6 @@
 
             elem.innerHTML = html;
             ImageLoader.lazyChildren(elem);
-            libraryBrowser.createCardMenus(elem);
         });
     }
 
@@ -161,8 +159,6 @@
 
         Promise.all(promises).then(function () {
             Dashboard.hideLoadingMsg();
-
-            libraryBrowser.setLastRefreshed(page);
         });
     }
 

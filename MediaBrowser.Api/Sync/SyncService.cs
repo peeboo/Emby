@@ -66,6 +66,7 @@ namespace MediaBrowser.Api.Sync
         public string Id { get; set; }
     }
 
+    [Route("/Sync/Items/Cancel", "POST", Summary = "Cancels items from a sync target")]
     [Route("/Sync/{TargetId}/Items", "DELETE", Summary = "Cancels items from a sync target")]
     public class CancelItems : IReturnVoid
     {
@@ -211,7 +212,7 @@ namespace MediaBrowser.Api.Sync
             return ToOptimizedResult(result);
         }
 
-        public void Delete(CancelItems request)
+        public void Any(CancelItems request)
         {
             var itemIds = request.ItemIds.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
 
@@ -227,7 +228,7 @@ namespace MediaBrowser.Api.Sync
             Task.WaitAll(task);
         }
 
-        public object Get(GetSyncJobItemFile request)
+        public async Task<object> Get(GetSyncJobItemFile request)
         {
             var jobItem = _syncManager.GetJobItem(request.Id);
 
@@ -241,10 +242,9 @@ namespace MediaBrowser.Api.Sync
                 throw new ArgumentException("The job item is not yet ready for transfer.");
             }
 
-            var task = _syncManager.ReportSyncJobItemTransferBeginning(request.Id);
-            Task.WaitAll(task);
+            await _syncManager.ReportSyncJobItemTransferBeginning(request.Id).ConfigureAwait(false);
 
-            return ResultFactory.GetStaticFileResult(Request, new StaticFileResultOptions
+            return await ResultFactory.GetStaticFileResult(Request, new StaticFileResultOptions
             {
                 Path = jobItem.OutputPath,
                 OnError = () =>
@@ -252,10 +252,11 @@ namespace MediaBrowser.Api.Sync
                     var failedTask = _syncManager.ReportSyncJobItemTransferFailed(request.Id);
                     Task.WaitAll(failedTask);
                 }
-            });
+
+            }).ConfigureAwait(false);
         }
 
-        public object Get(GetSyncDialogOptions request)
+        public async Task<object> Get(GetSyncDialogOptions request)
         {
             var result = new SyncDialogOptions();
 
@@ -290,7 +291,8 @@ namespace MediaBrowser.Api.Sync
                 {
                     Fields = new List<ItemFields>
                     {
-                        ItemFields.SyncInfo
+                        ItemFields.SyncInfo,
+                        ItemFields.BasicSyncInfo
                     }
                 };
 
@@ -298,8 +300,7 @@ namespace MediaBrowser.Api.Sync
                     .Select(_libraryManager.GetItemById)
                     .Where(i => i != null);
 
-                var dtos = _dtoService.GetBaseItemDtos(items, dtoOptions, authenticatedUser)
-                    .ToList();
+                var dtos = (await _dtoService.GetBaseItemDtos(items, dtoOptions, authenticatedUser).ConfigureAwait(false));
 
                 result.Options = SyncHelper.GetSyncOptions(dtos);
             }
@@ -343,7 +344,7 @@ namespace MediaBrowser.Api.Sync
             Task.WaitAll(task);
         }
 
-        public object Get(GetSyncJobItemAdditionalFile request)
+        public Task<object> Get(GetSyncJobItemAdditionalFile request)
         {
             var jobItem = _syncManager.GetJobItem(request.Id);
 
@@ -359,7 +360,7 @@ namespace MediaBrowser.Api.Sync
                 throw new ArgumentException("Sync job additional file not found.");
             }
 
-            return ToStaticFileResult(file.Path);
+            return ResultFactory.GetStaticFileResult(Request, file.Path);
         }
 
         public void Post(EnableSyncJobItem request)

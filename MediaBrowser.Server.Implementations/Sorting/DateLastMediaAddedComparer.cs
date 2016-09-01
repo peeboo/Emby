@@ -3,7 +3,6 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Sorting;
 using MediaBrowser.Model.Querying;
 using System;
-using System.Linq;
 
 namespace MediaBrowser.Server.Implementations.Sorting
 {
@@ -49,13 +48,13 @@ namespace MediaBrowser.Server.Implementations.Sorting
 
             if (folder != null)
             {
-                return folder.GetRecursiveChildren(User, i => !i.IsFolder)
-                    .Select(i => i.DateCreated)
-                    .OrderByDescending(i => i)
-                    .FirstOrDefault();
+                if (folder.DateLastMediaAdded.HasValue)
+                {
+                    return folder.DateLastMediaAdded.Value;
+                }
             }
 
-            return x.DateCreated;
+            return DateTime.MinValue;
         }
 
         /// <summary>

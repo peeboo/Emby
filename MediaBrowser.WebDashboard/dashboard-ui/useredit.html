@@ -1,4 +1,4 @@
-﻿<div id="editUserPage" data-role="page" class="page type-interior userProfilesPage" data-helpurl="https://github.com/MediaBrowser/Wiki/wiki/Users" data-require="jqmcollapsible,scripts/useredit,paper-input,jqmcheckbox,paper-checkbox">
+﻿<div id="editUserPage" data-role="page" class="page type-interior userProfilesPage" data-helpurl="https://github.com/MediaBrowser/Wiki/wiki/Users" data-require="scripts/useredit,emby-input,paper-checkbox,emby-button">
 
     <div data-role="content">
         <div class="content-primary">
@@ -9,44 +9,46 @@
                 <a href="#" data-role="button" onclick="Dashboard.navigate('userparentalcontrol.html', true);">${TabParentalControl}</a>
                 <a href="#" data-role="button" onclick="Dashboard.navigate('userpassword.html', true);">${TabPassword}</a>
             </div>
-            <p class="lnkEditUserPreferencesContainer hide">
+            <p class="lnkEditUserPreferencesContainer">
                 <a class="lnkEditUserPreferences" href="#" target="_blank">${ButtonEditOtherUserPreferences}</a>
             </p>
             <form class="editUserProfileForm">
 
-                <div class="disabledUserBanner" style="display:none;">
+                <div class="disabledUserBanner" style="display: none;">
                     <div class="btn btnDarkAccent btnStatic">
                         <div>
                             ${HeaderThisUserIsCurrentlyDisabled}
                         </div>
-                        <div style="margin-top:5px;">
+                        <div style="margin-top: 5px;">
                             ${MessageReenableUser}
                         </div>
                     </div>
 
                 </div>
-                <ul data-role="listview" class="ulForm">
-                    <li id="fldUserName">
-                        <paper-input id="txtUserName" required type="text" label="${LabelName}"></paper-input>
-                    </li>
-                    <li id="fldConnectInfo" style="display: none;">
-                        <div class="paperList" style="padding: 1em; border-radius: 5px;">
-                            <paper-input id="txtConnectUserName" type="text" label="${LabelConnectUserName}"></paper-input>
+                <div id="fldUserName" class="inputContainer">
+                    <input is="emby-input" id="txtUserName" required type="text" label="${LabelName}" />
+                </div>
+                <div id="fldConnectInfo" style="display: none;">
+                    <div class="paperList" style="padding: 1em; border-radius: 5px;">
+                        <div class="inputContainer">
+                            <input is="emby-input" id="txtConnectUserName" type="text" label="${LabelConnectUserName}" />
                             <div class="fieldDescription">
                                 <div>${LabelConnectUserNameHelp}</div>
                                 <div style="margin-top: .75em;">
                                     <a href="http://emby.media/connect" target="_blank">${ButtonLearnMoreAboutEmbyConnect}</a>
                                 </div>
                             </div>
-                            <br />
                         </div>
-                    </li>
-                    <li>
-                        <paper-checkbox id="chkIsAdmin">${OptionAllowUserToManageServer}</paper-checkbox>
-                    </li>
-                </ul>
+                    </div>
+                </div>
+                <br />
+                <div>
+                    <paper-checkbox id="chkIsAdmin">${OptionAllowUserToManageServer}</paper-checkbox>
+                </div>
+                <br />
+                <br />
                 <div id="featureAccessFields">
-                    <div class="paperCheckboxListLabel">${HeaderFeatureAccess}</div>
+                    <div class="paperListLabel">${HeaderFeatureAccess}</div>
                     <div class="paperCheckboxList paperList" style="padding:.5em 1em;">
                         <paper-checkbox id="chkEnableContentDeletion">${OptionAllowDeleteLibraryContent}</paper-checkbox>
                         <paper-checkbox id="chkEnableDownloading">${OptionAllowContentDownloading}</paper-checkbox>
@@ -56,18 +58,19 @@
                 </div>
                 <div>
                     <br />
-                    <div class="paperCheckboxListLabel">${HeaderPlayback}</div>
+                    <div class="paperListLabel">${HeaderPlayback}</div>
                     <div class="paperCheckboxList paperList" style="padding:.5em 1em;">
                         <paper-checkbox id="chkEnableMediaPlayback">${OptionAllowMediaPlayback}</paper-checkbox>
                         <paper-checkbox id="chkEnableAudioPlaybackTranscoding">${OptionAllowAudioPlaybackTranscoding}</paper-checkbox>
                         <paper-checkbox id="chkEnableVideoPlaybackTranscoding">${OptionAllowVideoPlaybackTranscoding}</paper-checkbox>
+                        <paper-checkbox id="chkEnableVideoPlaybackRemuxing">${OptionAllowVideoPlaybackRemuxing}</paper-checkbox>
                     </div>
                     <div class="fieldDescription">${OptionAllowMediaPlaybackTranscodingHelp}</div>
                     <br />
                 </div>
                 <div>
                     <br />
-                    <div class="paperCheckboxListLabel">${HeaderRemoteControl}</div>
+                    <div class="paperListLabel">${HeaderRemoteControl}</div>
                     <div class="paperCheckboxList paperList" style="padding:.5em 1em;">
                         <paper-checkbox id="chkEnableRemoteControlOtherUsers">${OptionAllowRemoteControlOthers}</paper-checkbox>
                         <paper-checkbox id="chkRemoteControlSharedDevices">${OptionAllowRemoteSharedDevices}</paper-checkbox>
@@ -77,7 +80,7 @@
                 </div>
                 <div>
                     <br />
-                    <div class="paperCheckboxListLabel">${HeaderSync}</div>
+                    <div class="paperListLabel">${HeaderSync}</div>
                     <div class="paperCheckboxList paperList" style="padding:.5em 1em;">
                         <paper-checkbox id="chkEnableSync">${OptionAllowSyncContent}</paper-checkbox>
                         <paper-checkbox id="chkEnableSyncTranscoding">${OptionAllowSyncTranscoding}</paper-checkbox>
@@ -87,7 +90,7 @@
                 <div>
                     <br />
                     <paper-checkbox id="chkEnableSharing">${OptionAllowLinkSharing}</paper-checkbox>
-                    <div class="fieldDescription paperCheckboxFieldDescription">${OptionAllowLinkSharingHelp}</div>
+                    <div class="fieldDescription paperCheckboxFieldDescription sharingHelp"></div>
                     <br />
                 </div>
                 <div id="fldIsEnabled" style="margin: 1em 0 2em;">
@@ -103,15 +106,11 @@
                     <div class="fieldDescription paperCheckboxFieldDescription">${OptionHideUserFromLoginHelp}</div>
                 </div>
                 <br />
-                <ul data-role="listview" class="ulForm">
-                    <li>
-                        <button type="submit" data-role="none" class="clearButton">
-                            <paper-button raised class="submit block"><iron-icon icon="check"></iron-icon><span>${ButtonSave}</span></paper-button>
-                        </button>
+                <div>
+                    <button is="emby-button" type="submit" class="raised submit block"><i class="md-icon">check</i><span>${ButtonSave}</span></button>
 
-                        <paper-button raised class="cancel block btnCancel" onclick="history.back();"><iron-icon icon="close"></iron-icon><span>${ButtonCancel}</span></paper-button>
-                    </li>
-                </ul>
+                    <button is="emby-button" type="button" class="raised cancel block btnCancel" onclick="history.back();"><i class="md-icon">close</i><span>${ButtonCancel}</span></button>
+                </div>
             </form>
         </div>
     </div>

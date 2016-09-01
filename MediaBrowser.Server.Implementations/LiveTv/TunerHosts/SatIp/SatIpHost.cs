@@ -110,7 +110,7 @@ namespace MediaBrowser.Server.Implementations.LiveTv.TunerHosts.SatIp
 
                 return new List<MediaSourceInfo> { mediaSource };
             }
-            return new List<MediaSourceInfo> { };
+            return new List<MediaSourceInfo>();
         }
 
         protected override async Task<MediaSourceInfo> GetChannelStream(TunerHostInfo tuner, string channelId, string streamId, CancellationToken cancellationToken)
@@ -163,6 +163,11 @@ namespace MediaBrowser.Server.Implementations.LiveTv.TunerHosts.SatIp
             }
 
             return list;
+        }
+
+        public string ApplyDuration(string streamPath, TimeSpan duration)
+        {
+            return streamPath;
         }
     }
 }

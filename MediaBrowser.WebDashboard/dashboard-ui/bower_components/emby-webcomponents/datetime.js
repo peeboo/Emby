@@ -1,4 +1,4 @@
-define([], function () {
+﻿define(['globalize'], function (globalize) {
 
     function parseISO8601Date(s, toLocal) {
 
@@ -94,11 +94,52 @@ define([], function () {
         return parts.join(':');
     }
 
+    var toLocaleTimeStringSupportsLocales = function toLocaleTimeStringSupportsLocales() {
+        try {
+            new Date().toLocaleTimeString('i');
+        } catch (e) {
+            return e.name === 'RangeError';
+        }
+        return false;
+    }();
+
+    function toLocaleDateString(date) {
+
+        var currentLocale = globalize.getCurrentLocale();
+
+        return currentLocale && toLocaleTimeStringSupportsLocales ?
+            date.toLocaleDateString(currentLocale) :
+            date.toLocaleDateString();
+    }
+
+    function toLocaleTimeString(date) {
+
+        var currentLocale = globalize.getCurrentLocale();
+
+        return currentLocale && toLocaleTimeStringSupportsLocales ?
+            date.toLocaleTimeString(currentLocale) :
+            date.toLocaleTimeString();
+    }
+
     function getDisplayTime(date) {
-        var time = date.toLocaleTimeString().toLowerCase();
 
-        if (time.indexOf('am') != -1 || time.indexOf('pm') != -1) {
+        if ((typeof date).toString().toLowerCase() === 'string') {
+            try {
 
+                date = parseISO8601Date(date, true);
+
+            } catch (err) {
+                return date;
+            }
+        }
+
+        var time = toLocaleTimeString(date);
+
+        var timeLower = time.toLowerCase();
+
+        if (timeLower.indexOf('am') != -1 || timeLower.indexOf('pm') != -1) {
+
+            time = timeLower;
             var hour = date.getHours() % 12;
             var suffix = date.getHours() > 11 ? 'pm' : 'am';
             if (!hour) {
@@ -124,9 +165,20 @@ define([], function () {
         return time;
     }
 
+    function isRelativeDay(date, offsetInDays) {
+        var yesterday = new Date();
+        var day = yesterday.getDate() + offsetInDays;
+
+        yesterday.setDate(day); // automatically adjusts month/year appropriately
+
+        return date.getFullYear() == yesterday.getFullYear() && date.getMonth() == yesterday.getMonth() && date.getDate() == day;
+    }
+
     return {
         parseISO8601Date: parseISO8601Date,
         getDisplayRunningTime: getDisplayRunningTime,
-        getDisplayTime: getDisplayTime
+        toLocaleDateString: toLocaleDateString,
+        getDisplayTime: getDisplayTime,
+        isRelativeDay: isRelativeDay
     };
 });

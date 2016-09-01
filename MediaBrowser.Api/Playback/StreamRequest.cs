@@ -51,7 +51,9 @@ namespace MediaBrowser.Api.Playback
 
         [ApiMember(Name = "MaxAudioChannels", Description = "Optional. Specify a maximum number of audio channels to encode to, e.g. 2", IsRequired = false, DataType = "int", ParameterType = "query", Verb = "GET")]
         public int? MaxAudioChannels { get; set; }
-        
+
+        public int? TranscodingMaxAudioChannels { get; set; }
+
         /// <summary>
         /// Gets or sets the audio sample rate.
         /// </summary>
@@ -72,6 +74,7 @@ namespace MediaBrowser.Api.Playback
         public string Params { get; set; }
         public string PlaySessionId { get; set; }
         public string LiveStreamId { get; set; }
+        public string Tag { get; set; }
     }
 
     public class VideoStreamRequest : StreamRequest
@@ -190,7 +193,7 @@ namespace MediaBrowser.Api.Playback
         [ApiMember(Name = "CopyTimestamps", Description = "Whether or not to copy timestamps when transcoding with an offset. Defaults to false.", IsRequired = false, DataType = "bool", ParameterType = "query", Verb = "GET")]
         public bool CopyTimestamps { get; set; }
 
-        public bool ForceLiveStream { get; set; }
+        public bool EnableSubtitlesInManifest { get; set; }
 
         public VideoStreamRequest()
         {

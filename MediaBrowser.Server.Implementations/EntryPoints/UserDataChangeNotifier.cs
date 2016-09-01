@@ -92,7 +92,7 @@ namespace MediaBrowser.Server.Implementations.EntryPoints
                 var changes = _changedItems.ToList();
                 _changedItems.Clear();
 
-                SendNotifications(changes, CancellationToken.None);
+                var task = SendNotifications(changes, CancellationToken.None);
 
                 if (UpdateTimer != null)
                 {
@@ -119,7 +119,7 @@ namespace MediaBrowser.Server.Implementations.EntryPoints
                         .DistinctBy(i => i.Id)
                         .Select(i =>
                         {
-                            var dto = _userDataManager.GetUserDataDto(i, user);
+                            var dto = _userDataManager.GetUserDataDto(i, user).Result;
                             dto.ItemId = i.Id.ToString("N");
                             return dto;
                         })

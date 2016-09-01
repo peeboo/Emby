@@ -74,7 +74,7 @@ namespace MediaBrowser.Controller.MediaEncoding
             Level = info.VideoLevel;
             ItemId = info.ItemId;
             MediaSourceId = info.MediaSourceId;
-            AudioCodec = info.AudioCodec;
+            AudioCodec = info.TargetAudioCodec;
             MaxAudioChannels = info.MaxAudioChannels;
             AudioBitRate = info.AudioBitrate;
             AudioSampleRate = info.TargetAudioSampleRate;

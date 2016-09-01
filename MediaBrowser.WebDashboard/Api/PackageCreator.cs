@@ -11,8 +11,6 @@ using System.Threading.Tasks;
 using CommonIO;
 using MediaBrowser.Controller.Net;
 using WebMarkupMin.Core;
-using WebMarkupMin.Core.Minifiers;
-using WebMarkupMin.Core.Settings;
 
 namespace MediaBrowser.WebDashboard.Api
 {
@@ -258,7 +256,6 @@ namespace MediaBrowser.WebDashboard.Api
 
                     if (string.Equals(mode, "cordova", StringComparison.OrdinalIgnoreCase))
                     {
-                        html = ModifyForCordova(html);
                     }
                     else if (!string.IsNullOrWhiteSpace(path) && !string.Equals(path, "index.html", StringComparison.OrdinalIgnoreCase))
                     {
@@ -274,7 +271,7 @@ namespace MediaBrowser.WebDashboard.Api
                         }
                         var mainFile = File.ReadAllText(GetDashboardResourcePath("index.html"));
 
-                        html = ReplaceFirst(mainFile, "<div class=\"mainAnimatedPage hide\"></div>", "<div class=\"mainAnimatedPage hide\">" + html + "</div>");
+                        html = ReplaceFirst(mainFile, "<div class=\"mainAnimatedPages skinBody\"></div>", "<div class=\"mainAnimatedPages skinBody hide\">" + html + "</div>");
                     }
 
                     if (!string.IsNullOrWhiteSpace(localizationCulture))
@@ -339,41 +336,6 @@ namespace MediaBrowser.WebDashboard.Api
             return text.Substring(0, pos) + replace + text.Substring(pos + search.Length);
         }
 
-        private string ModifyForCordova(string html)
-        {
-            // Replace CORDOVA_REPLACE_SUPPORTER_SUBMIT_START
-            html = ReplaceBetween(html, "<!--CORDOVA_REPLACE_SUPPORTER_SUBMIT_START-->", "<!--CORDOVA_REPLACE_SUPPORTER_SUBMIT_END-->", "<i class=\"fa fa-check\"></i><span>${ButtonPurchase}</span>");
-
-            return html;
-        }
-
-        private string ReplaceBetween(string html, string startToken, string endToken, string newHtml)
-        {
-            var start = html.IndexOf(startToken, StringComparison.OrdinalIgnoreCase);
-
-            if (start == -1)
-            {
-                return html;
-            }
-
-            var end = html.IndexOf(endToken, start, StringComparison.OrdinalIgnoreCase);
-
-            if (end == -1)
-            {
-                return html;
-            }
-
-            string result = html.Substring(start, end - start);
-            html = html.Replace(result, newHtml);
-
-            return ReplaceBetween(html, startToken, endToken, newHtml);
-        }
-
-        private string GetLocalizationToken(string phrase)
-        {
-            return "${" + phrase + "}";
-        }
-
         /// <summary>
         /// Gets the meta tags.
         /// </summary>
@@ -384,7 +346,7 @@ namespace MediaBrowser.WebDashboard.Api
 
             if (string.Equals(mode, "cordova", StringComparison.OrdinalIgnoreCase))
             {
-                sb.Append("<meta http-equiv=\"Content-Security-Policy\" content=\"default-src * 'unsafe-inline' 'unsafe-eval' data:;\">");
+                sb.Append("<meta http-equiv=\"Content-Security-Policy\" content=\"default-src * 'unsafe-inline' 'unsafe-eval' data: filesystem:;\">");
             }
 
             sb.Append("<link rel=\"manifest\" href=\"manifest.json\">");
@@ -408,12 +370,12 @@ namespace MediaBrowser.WebDashboard.Api
             sb.Append("<meta property=\"fb:app_id\" content=\"1618309211750238\">");
 
             // http://developer.apple.com/library/ios/#DOCUMENTATION/AppleApplications/Reference/SafariWebContent/ConfiguringWebApplications/ConfiguringWebApplications.html
-            sb.Append("<link rel=\"apple-touch-icon\" href=\"css/images/touchicon.png\">");
-            sb.Append("<link rel=\"apple-touch-icon\" sizes=\"72x72\" href=\"css/images/touchicon72.png\">");
-            sb.Append("<link rel=\"apple-touch-icon\" sizes=\"114x114\" href=\"css/images/touchicon114.png\">");
+            sb.Append("<link rel=\"apple-touch-icon\" href=\"touchicon.png\">");
+            sb.Append("<link rel=\"apple-touch-icon\" sizes=\"72x72\" href=\"touchicon72.png\">");
+            sb.Append("<link rel=\"apple-touch-icon\" sizes=\"114x114\" href=\"touchicon114.png\">");
             sb.Append("<link rel=\"apple-touch-startup-image\" href=\"css/images/iossplash.png\">");
             sb.Append("<link rel=\"shortcut icon\" href=\"css/images/favicon.ico\">");
-            sb.Append("<meta name=\"msapplication-TileImage\" content=\"css/images/touchicon144.png\">");
+            sb.Append("<meta name=\"msapplication-TileImage\" content=\"touchicon144.png\">");
             sb.Append("<meta name=\"msapplication-TileColor\" content=\"#333333\">");
             sb.Append("<meta name=\"theme-color\" content=\"#43A047\">");
 
@@ -467,7 +429,7 @@ namespace MediaBrowser.WebDashboard.Api
 
             var files = new List<string>();
 
-            files.Add("bower_components/requirejs/require.js");
+            files.Add("bower_components/requirejs/require.js" + versionString);
 
             files.Add("scripts/site.js" + versionString);
 
@@ -476,15 +438,7 @@ namespace MediaBrowser.WebDashboard.Api
                 files.Insert(0, "cordova.js");
             }
 
-            var tags = files.Select(s =>
-            {
-                if (s.IndexOf("require", StringComparison.OrdinalIgnoreCase) == -1 && s.IndexOf("alameda", StringComparison.OrdinalIgnoreCase) == -1)
-                {
-                    return string.Format("<script src=\"{0}\" async></script>", s);
-                }
-                return string.Format("<script src=\"{0}\"></script>", s);
-
-            }).ToArray();
+            var tags = files.Select(s => string.Format("<script src=\"{0}\" defer></script>", s)).ToArray();
 
             builder.Append(string.Join(string.Empty, tags));
 

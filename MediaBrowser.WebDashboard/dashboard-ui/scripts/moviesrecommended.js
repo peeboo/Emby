@@ -1,14 +1,4 @@
-﻿define(['jQuery', 'libraryBrowser', 'scrollStyles'], function ($, libraryBrowser) {
-
-    function getView() {
-
-        return 'Poster';
-    }
-
-    function getResumeView() {
-
-        return 'Thumb';
-    }
+﻿define(['libraryBrowser', 'components/categorysyncbuttons', 'cardBuilder', 'dom', 'scrollStyles', 'emby-itemscontainer', 'emby-tabs', 'emby-button'], function (libraryBrowser, categorysyncbuttons, cardBuilder, dom) {
 
     function enableScrollX() {
         return browserInfo.mobile && AppInfo.enableAppLayouts;
@@ -24,59 +14,35 @@
 
     function loadLatest(page, userId, parentId) {
 
-        var limit = 18;
-
         var options = {
 
             IncludeItemTypes: "Movie",
-            Limit: limit,
-            Fields: "PrimaryImageAspectRatio,MediaSourceCount,SyncInfo",
+            Limit: 18,
+            Fields: "PrimaryImageAspectRatio,MediaSourceCount,BasicSyncInfo",
             ParentId: parentId,
             ImageTypeLimit: 1,
-            EnableImageTypes: "Primary,Backdrop,Banner,Thumb"
+            EnableImageTypes: "Primary,Backdrop,Banner,Thumb",
+            EnableTotalRecordCount: false
         };
 
         ApiClient.getJSON(ApiClient.getUrl('Users/' + userId + '/Items/Latest', options)).then(function (items) {
 
-            var view = getView();
-            var html = '';
+            var allowBottomPadding = !enableScrollX();
 
-            if (view == 'PosterCard') {
-
-                html += libraryBrowser.getPosterViewHtml({
-                    items: items,
-                    lazy: true,
-                    shape: getPortraitShape(),
-                    overlayText: false,
-                    showTitle: true,
-                    showYear: true,
-                    cardLayout: true,
-                    showDetailsMenu: true
-
-                });
-
-            } else if (view == 'Poster') {
-
-                html += libraryBrowser.getPosterViewHtml({
-                    items: items,
-                    shape: getPortraitShape(),
-                    centerText: true,
-                    lazy: true,
-                    overlayText: false,
-                    showDetailsMenu: true,
-                    overlayPlayButton: true
-                });
-            }
-
-            var recentlyAddedItems = page.querySelector('#recentlyAddedItems');
-            recentlyAddedItems.innerHTML = html;
-            ImageLoader.lazyChildren(recentlyAddedItems);
+            var container = page.querySelector('#recentlyAddedItems');
+            cardBuilder.buildCards(items, {
+                itemsContainer: container,
+                shape: getPortraitShape(),
+                scalable: true,
+                overlayPlayButton: true,
+                allowBottomPadding: allowBottomPadding
+            });
         });
     }
 
     function loadResume(page, userId, parentId) {
 
-        var screenWidth = $(window).width();
+        var screenWidth = dom.getWindowSize().innerWidth;
 
         var options = {
 
@@ -84,57 +50,35 @@
             SortOrder: "Descending",
             IncludeItemTypes: "Movie",
             Filters: "IsResumable",
-            Limit: screenWidth >= 1920 ? 6 : (screenWidth >= 1600 ? 4 : 3),
+            Limit: screenWidth >= 1920 ? 5 : (screenWidth >= 1600 ? 4 : 3),
             Recursive: true,
-            Fields: "PrimaryImageAspectRatio,MediaSourceCount,SyncInfo",
+            Fields: "PrimaryImageAspectRatio,MediaSourceCount,BasicSyncInfo",
             CollapseBoxSetItems: false,
             ParentId: parentId,
             ImageTypeLimit: 1,
-            EnableImageTypes: "Primary,Backdrop,Banner,Thumb"
+            EnableImageTypes: "Primary,Backdrop,Banner,Thumb",
+            EnableTotalRecordCount: false
         };
 
         ApiClient.getItems(userId, options).then(function (result) {
 
             if (result.Items.length) {
-                $('#resumableSection', page).show();
+                page.querySelector('#resumableSection').classList.remove('hide');
             } else {
-                $('#resumableSection', page).hide();
+                page.querySelector('#resumableSection').classList.add('hide');
             }
 
-            var view = getResumeView();
-            var html = '';
+            var allowBottomPadding = !enableScrollX();
 
-            if (view == 'ThumbCard') {
-
-                html += libraryBrowser.getPosterViewHtml({
-                    items: result.Items,
-                    preferThumb: true,
-                    shape: getThumbShape(),
-                    showTitle: true,
-                    showYear: true,
-                    lazy: true,
-                    cardLayout: true,
-                    showDetailsMenu: true
-
-                });
-
-            } else if (view == 'Thumb') {
-
-                html += libraryBrowser.getPosterViewHtml({
-                    items: result.Items,
-                    preferThumb: true,
-                    shape: getThumbShape(),
-                    overlayText: true,
-                    showTitle: false,
-                    lazy: true,
-                    showDetailsMenu: true,
-                    overlayPlayButton: true
-                });
-            }
-
-            var resumableItems = page.querySelector('#resumableItems');
-            resumableItems.innerHTML = html;
-            ImageLoader.lazyChildren(resumableItems);
+            var container = page.querySelector('#resumableItems');
+            cardBuilder.buildCards(result.Items, {
+                itemsContainer: container,
+                preferThumb: true,
+                shape: getThumbShape(),
+                scalable: true,
+                overlayPlayButton: true,
+                allowBottomPadding: allowBottomPadding
+            });
 
         });
     }
@@ -166,39 +110,22 @@
         html += '<div class="homePageSection">';
         html += '<h1 class="listHeader">' + title + '</h1>';
 
+        var allowBottomPadding = true;
+
         if (enableScrollX()) {
-            html += '<div class="hiddenScrollX">';
+            allowBottomPadding = false;
+            html += '<div is="emby-itemscontainer" class="itemsContainer hiddenScrollX">';
         } else {
-            html += '<div>';
+            html += '<div is="emby-itemscontainer" class="itemsContainer vertical-wrap">';
         }
 
-        var view = getView();
+        html += cardBuilder.getCardsHtml(recommendation.Items, {
+            shape: getPortraitShape(),
+            scalable: true,
+            overlayPlayButton: true,
+            allowBottomPadding: allowBottomPadding
+        });
 
-        if (view == 'PosterCard') {
-
-            html += libraryBrowser.getPosterViewHtml({
-                items: recommendation.Items,
-                lazy: true,
-                shape: getPortraitShape(),
-                overlayText: false,
-                showTitle: true,
-                showYear: true,
-                cardLayout: true,
-                showDetailsMenu: true
-
-            });
-
-        } else if (view == 'Poster') {
-
-            html += libraryBrowser.getPosterViewHtml({
-                items: recommendation.Items,
-                shape: getPortraitShape(),
-                centerText: true,
-                lazy: true,
-                showDetailsMenu: true,
-                overlayPlayButton: true
-            });
-        }
         html += '</div>';
         html += '</div>';
 
@@ -207,14 +134,14 @@
 
     function loadSuggestions(page, userId, parentId) {
 
-        var screenWidth = $(window).width();
+        var screenWidth = dom.getWindowSize().innerWidth;
 
         var url = ApiClient.getUrl("Movies/Recommendations", {
 
             userId: userId,
-            categoryLimit: screenWidth >= 1200 ? 4 : 3,
-            ItemLimit: screenWidth >= 1920 ? 9 : (screenWidth >= 1600 ? 8 : (screenWidth >= 1200 ? 7 : 6)),
-            Fields: "PrimaryImageAspectRatio,MediaSourceCount,SyncInfo",
+            categoryLimit: 6,
+            ItemLimit: screenWidth >= 1920 ? 8 : (screenWidth >= 1600 ? 8 : (screenWidth >= 1200 ? 6 : 5)),
+            Fields: "PrimaryImageAspectRatio,MediaSourceCount,BasicSyncInfo",
             ImageTypeLimit: 1,
             EnableImageTypes: "Primary,Backdrop,Banner,Thumb"
         });
@@ -223,14 +150,14 @@
 
             if (!recommendations.length) {
 
-                $('.noItemsMessage', page).show();
+                page.querySelector('.noItemsMessage').classList.remove('hide');
                 page.querySelector('.recommendations').innerHTML = '';
                 return;
             }
 
             var html = recommendations.map(getRecommendationHtml).join('');
 
-            $('.noItemsMessage', page).hide();
+            page.querySelector('.noItemsMessage').classList.add('hide');
 
             var recs = page.querySelector('.recommendations');
             recs.innerHTML = html;
@@ -241,13 +168,15 @@
     function initSuggestedTab(page, tabContent) {
 
         var containers = tabContent.querySelectorAll('.itemsContainer');
-        if (enableScrollX()) {
-            $(containers).addClass('hiddenScrollX');
-        } else {
-            $(containers).removeClass('hiddenScrollX');
+        for (var i = 0, length = containers.length; i < length; i++) {
+            if (enableScrollX()) {
+                containers[i].classList.add('hiddenScrollX');
+                containers[i].classList.remove('vertical-wrap');
+            } else {
+                containers[i].classList.remove('hiddenScrollX');
+                containers[i].classList.add('vertical-wrap');
+            }
         }
-
-        $(containers).createCardMenus();
     }
 
     function loadSuggestionsTab(view, params, tabContent) {
@@ -260,31 +189,17 @@
         loadResume(tabContent, userId, parentId);
         loadLatest(tabContent, userId, parentId);
 
-        if (AppInfo.enableMovieHomeSuggestions) {
-            loadSuggestions(tabContent, userId, parentId);
-        }
-    }
-
-    function onPlaybackStop(e, state) {
-
-        if (state.NowPlayingItem && state.NowPlayingItem.MediaType == 'Video') {
-            var page = $($.mobile.activePage)[0];
-            var pageTabsContainer = page.querySelector('.pageTabsContainer');
-
-            pageTabsContainer.dispatchEvent(new CustomEvent("tabchange", {
-                detail: {
-                    selectedTabIndex: libraryBrowser.selectedTab(pageTabsContainer)
-                }
-            }));
-        }
+        loadSuggestions(tabContent, userId, parentId);
     }
 
     return function (view, params) {
 
         var self = this;
 
-        self.initTab = function() {
+        self.initTab = function () {
+
             var tabContent = view.querySelector('.pageTabContent[data-index=\'' + 0 + '\']');
+            categorysyncbuttons.init(tabContent);
             initSuggestedTab(view, tabContent);
         };
 
@@ -293,24 +208,15 @@
             loadSuggestionsTab(view, params, tabContent);
         };
 
-        $('.recommendations', view).createCardMenus();
+        var viewTabs = view.querySelector('.libraryViewNav');
 
-        var pageTabsContainer = view.querySelector('.pageTabsContainer');
-
-        var baseUrl = 'movies.html';
-        var topParentId = params.topParentId;
-        if (topParentId) {
-            baseUrl += '?topParentId=' + topParentId;
-        }
-
-        libraryBrowser.configurePaperLibraryTabs(view, view.querySelector('paper-tabs'), pageTabsContainer, baseUrl);
+        libraryBrowser.configurePaperLibraryTabs(view, viewTabs, view.querySelectorAll('.pageTabContent'), [0, 3, 4, 5]);
 
         var tabControllers = [];
         var renderedTabs = [];
 
-        function loadTab(page, index) {
+        function getTabController(page, index, callback) {
 
-            var tabContent = page.querySelector('.pageTabContent[data-index=\'' + index + '\']');
             var depends = [];
 
             switch (index) {
@@ -337,12 +243,14 @@
             }
 
             require(depends, function (controllerFactory) {
-
+                var tabContent;
                 if (index == 0) {
+                    tabContent = view.querySelector('.pageTabContent[data-index=\'' + index + '\']');
                     self.tabContent = tabContent;
                 }
                 var controller = tabControllers[index];
                 if (!controller) {
+                    tabContent = view.querySelector('.pageTabContent[data-index=\'' + index + '\']');
                     controller = index ? new controllerFactory(view, params, tabContent) : self;
                     tabControllers[index] = controller;
 
@@ -351,6 +259,24 @@
                     }
                 }
 
+                callback(controller);
+            });
+        }
+
+        function preLoadTab(page, index) {
+
+            getTabController(page, index, function (controller) {
+                if (renderedTabs.indexOf(index) == -1) {
+                    if (controller.preRender) {
+                        controller.preRender();
+                    }
+                }
+            });
+        }
+
+        function loadTab(page, index) {
+
+            getTabController(page, index, function (controller) {
                 if (renderedTabs.indexOf(index) == -1) {
                     renderedTabs.push(index);
                     controller.renderTab();
@@ -358,11 +284,15 @@
             });
         }
 
-        pageTabsContainer.addEventListener('tabchange', function (e) {
+        viewTabs.addEventListener('beforetabchange', function (e) {
+            preLoadTab(view, parseInt(e.detail.selectedTabIndex));
+        });
+        viewTabs.addEventListener('tabchange', function (e) {
             loadTab(view, parseInt(e.detail.selectedTabIndex));
         });
 
         view.addEventListener('viewbeforeshow', function (e) {
+
             if (!view.getAttribute('data-title')) {
 
                 var parentId = params.topParentId;
@@ -383,12 +313,34 @@
             }
         });
 
+        function onPlaybackStop(e, state) {
+
+            if (state.NowPlayingItem && state.NowPlayingItem.MediaType == 'Video') {
+
+                renderedTabs = [];
+                viewTabs.triggerTabChange();
+            }
+        }
+
         view.addEventListener('viewshow', function (e) {
             Events.on(MediaController, 'playbackstop', onPlaybackStop);
         });
 
         view.addEventListener('viewbeforehide', function (e) {
             Events.off(MediaController, 'playbackstop', onPlaybackStop);
+        });
+
+        if (AppInfo.enableHeadRoom) {
+            require(["headroom-window"], function (headroom) {
+                headroom.add(viewTabs);
+                self.headroom = headroom;
+            });
+        }
+
+        view.addEventListener('viewdestroy', function (e) {
+            if (self.headroom) {
+                self.headroom.remove(viewTabs);
+            }
         });
     };
 

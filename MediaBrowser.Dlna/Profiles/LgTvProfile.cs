@@ -38,7 +38,7 @@ namespace MediaBrowser.Dlna.Profiles
                new TranscodingProfile
                {
                    Container = "ts",
-                   AudioCodec = "ac3",
+                   AudioCodec = "ac3,aac,mp3",
                    VideoCodec = "h264",
                    Type = DlnaProfileType.Video
                },
@@ -54,21 +54,21 @@ namespace MediaBrowser.Dlna.Profiles
                 new DirectPlayProfile
                 {
                     Container = "ts",
-                    VideoCodec = "h264,hevc",
+                    VideoCodec = "h264",
                     AudioCodec = "aac,ac3,mp3",
                     Type = DlnaProfileType.Video
                 },
                 new DirectPlayProfile
                 {
                     Container = "mkv",
-                    VideoCodec = "h264,hevc",
+                    VideoCodec = "h264",
                     AudioCodec = "aac,ac3,mp3",
                     Type = DlnaProfileType.Video
                 },
                 new DirectPlayProfile
                 {
                     Container = "mp4",
-                    VideoCodec = "h264,mpeg4,hevc",
+                    VideoCodec = "h264,mpeg4",
                     AudioCodec = "aac,ac3,mp3",
                     Type = DlnaProfileType.Video
                 },
@@ -189,6 +189,22 @@ namespace MediaBrowser.Dlna.Profiles
                    }
                }
            };
+
+            SubtitleProfiles = new[]
+            {
+                new SubtitleProfile
+                {
+                    Format = "srt",
+                    Method = SubtitleDeliveryMethod.Embed
+                },
+                new SubtitleProfile
+                {
+                    Format = "srt",
+                    Method = SubtitleDeliveryMethod.External
+                }
+            };
+
+            ResponseProfiles = new ResponseProfile[] { };
         }
     }
 }

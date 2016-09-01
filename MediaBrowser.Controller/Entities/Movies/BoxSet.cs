@@ -8,13 +8,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
+using MediaBrowser.Controller.Entities.Audio;
 
 namespace MediaBrowser.Controller.Entities.Movies
 {
     /// <summary>
     /// Class BoxSet
     /// </summary>
-    public class BoxSet : Folder, IHasTrailers, IHasKeywords, IHasDisplayOrder, IHasLookupInfo<BoxSetInfo>, IHasShares
+    public class BoxSet : Folder, IHasTrailers, IHasDisplayOrder, IHasLookupInfo<BoxSetInfo>, IHasShares
     {
         public List<Share> Shares { get; set; }
 
@@ -25,7 +26,6 @@ namespace MediaBrowser.Controller.Entities.Movies
             RemoteTrailerIds = new List<Guid>();
 
             DisplayOrder = ItemSortBy.PremiereDate;
-            Keywords = new List<string>();
             Shares = new List<Share>();
         }
 
@@ -47,12 +47,6 @@ namespace MediaBrowser.Controller.Entities.Movies
         public List<MediaUrl> RemoteTrailers { get; set; }
 
         /// <summary>
-        /// Gets or sets the tags.
-        /// </summary>
-        /// <value>The tags.</value>
-        public List<string> Keywords { get; set; }
-
-        /// <summary>
         /// Gets or sets the display order.
         /// </summary>
         /// <value>The display order.</value>
@@ -66,6 +60,26 @@ namespace MediaBrowser.Controller.Entities.Movies
         public override UnratedItem GetBlockUnratedType()
         {
             return UnratedItem.Movie;
+        }
+
+        protected override IEnumerable<BaseItem> GetNonCachedChildren(IDirectoryService directoryService)
+        {
+            if (IsLegacyBoxSet)
+            {
+                return base.GetNonCachedChildren(directoryService);
+            }
+            return new List<BaseItem>();
+        }
+
+        protected override IEnumerable<BaseItem> LoadChildren()
+        {
+            if (IsLegacyBoxSet)
+            {
+                return base.LoadChildren();
+            }
+
+            // Save a trip to the database
+            return new List<BaseItem>();
         }
 
         [IgnoreDataMember]
@@ -82,7 +96,21 @@ namespace MediaBrowser.Controller.Entities.Movies
         {
             get
             {
-                return true;
+                if (IsLegacyBoxSet)
+                {
+                    return true;
+                }
+
+                return false;
+            }
+        }
+
+        [IgnoreDataMember]
+        private bool IsLegacyBoxSet
+        {
+            get
+            {
+                return !FileSystem.ContainsSubPath(ConfigurationManager.ApplicationPaths.DataPath, Path);
             }
         }
 
@@ -118,7 +146,7 @@ namespace MediaBrowser.Controller.Entities.Movies
             // Gather all possible ratings
             var ratings = GetRecursiveChildren()
                 .Concat(GetLinkedChildren())
-                .Where(i => i is Movie || i is Series)
+                .Where(i => i is Movie || i is Series || i is MusicAlbum || i is Game)
                 .Select(i => i.OfficialRating)
                 .Where(i => !string.IsNullOrEmpty(i))
                 .Distinct(StringComparer.OrdinalIgnoreCase)

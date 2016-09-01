@@ -12,13 +12,13 @@ using System.Configuration.Install;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Management;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using CommonIO.Windows;
-using Emby.Drawing.ImageMagick;
 using ImageMagickSharp;
 using MediaBrowser.Common.Net;
 using MediaBrowser.Server.Implementations.Logging;
@@ -102,7 +102,7 @@ namespace MediaBrowser.ServerApplication
 
             if (IsAlreadyRunning(applicationPath, currentProcess))
             {
-                logger.Info("Shutting down because another instance of Media Browser Server is already running.");
+                logger.Info("Shutting down because another instance of Emby Server is already running.");
                 return;
             }
 
@@ -130,13 +130,28 @@ namespace MediaBrowser.ServerApplication
         /// <returns><c>true</c> if [is already running] [the specified current process]; otherwise, <c>false</c>.</returns>
         private static bool IsAlreadyRunning(string applicationPath, Process currentProcess)
         {
-            var filename = Path.GetFileName(applicationPath);
-
             var duplicate = Process.GetProcesses().FirstOrDefault(i =>
             {
                 try
                 {
-                    return string.Equals(filename, Path.GetFileName(i.MainModule.FileName)) && currentProcess.Id != i.Id;
+                    if (currentProcess.Id == i.Id)
+                    {
+                        return false;
+                    }
+                }
+                catch (Exception)
+                {
+                    return false;
+                }
+
+                try
+                {
+                    //_logger.Info("Module: {0}", i.MainModule.FileName);
+                    if (string.Equals(applicationPath, i.MainModule.FileName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                    return false;
                 }
                 catch (Exception)
                 {
@@ -148,9 +163,44 @@ namespace MediaBrowser.ServerApplication
             {
                 _logger.Info("Found a duplicate process. Giving it time to exit.");
 
-                if (!duplicate.WaitForExit(15000))
+                if (!duplicate.WaitForExit(20000))
                 {
                     _logger.Info("The duplicate process did not exit.");
+                    return true;
+                }
+            }
+
+            if (!_isRunningAsService)
+            {
+                return IsAlreadyRunningAsService(applicationPath);
+            }
+
+            return false;
+        }
+
+        private static bool IsAlreadyRunningAsService(string applicationPath)
+        {
+            var serviceName = BackgroundService.GetExistingServiceName();
+
+            WqlObjectQuery wqlObjectQuery = new WqlObjectQuery(string.Format("SELECT * FROM Win32_Service WHERE State = 'Running' AND Name = '{0}'", serviceName));
+            ManagementObjectSearcher managementObjectSearcher = new ManagementObjectSearcher(wqlObjectQuery);
+            ManagementObjectCollection managementObjectCollection = managementObjectSearcher.Get();
+
+            foreach (ManagementObject managementObject in managementObjectCollection)
+            {
+                var obj = managementObject.GetPropertyValue("PathName");
+                if (obj == null)
+                {
+                    continue;
+                }
+                var path = obj.ToString();
+
+                _logger.Info("Service path: {0}", path);
+                // Need to use indexOf instead of equality because the path will have the full service command line
+                if (path.IndexOf(applicationPath, StringComparison.OrdinalIgnoreCase) != -1)
+                {
+                    _logger.Info("The windows service is already running");
+                    MessageBox.Show("Emby Server is already running as a Windows Service. Only one instance is allowed at a time. To run as a tray icon, shut down the Windows Service.");
                     return true;
                 }
             }
@@ -244,7 +294,9 @@ namespace MediaBrowser.ServerApplication
 
 
             var task = _appHost.Init(initProgress);
-            task = task.ContinueWith(new Action<Task>(a => _appHost.RunStartupTasks()));
+            Task.WaitAll(task);
+
+            task = task.ContinueWith(new Action<Task>(a => _appHost.RunStartupTasks()), TaskContinuationOptions.OnlyOnRanToCompletion | TaskContinuationOptions.AttachedToParent);
 
             if (runService)
             {
@@ -254,10 +306,7 @@ namespace MediaBrowser.ServerApplication
             {
                 Task.WaitAll(task);
 
-                task = InstallVcredistIfNeeded(_appHost, _logger);
-                Task.WaitAll(task);
-
-                task = InstallFrameworkV46IfNeeded(_logger);
+                task = InstallVcredist2013IfNeeded(_appHost, _logger);
                 Task.WaitAll(task);
 
                 SystemEvents.SessionEnding += SystemEvents_SessionEnding;
@@ -273,11 +322,13 @@ namespace MediaBrowser.ServerApplication
         }
 
         private static ServerNotifyIcon _serverNotifyIcon;
+        private static TaskScheduler _mainTaskScheduler;
         private static void ShowTrayIcon()
         {
             //Application.EnableVisualStyles();
             //Application.SetCompatibleTextRenderingDefault(false);
             _serverNotifyIcon = new ServerNotifyIcon(_appHost.LogManager, _appHost, _appHost.ServerConfigurationManager, _appHost.LocalizationManager);
+            _mainTaskScheduler = TaskScheduler.FromCurrentSynchronizationContext();
             Application.Run();
         }
 
@@ -317,7 +368,19 @@ namespace MediaBrowser.ServerApplication
         {
             if (e.Reason == SessionSwitchReason.SessionLogon)
             {
-                BrowserLauncher.OpenDashboard(_appHost, _logger);
+                BrowserLauncher.OpenDashboard(_appHost);
+            }
+        }
+
+        public static void Invoke(Action action)
+        {
+            if (_isRunningAsService)
+            {
+                action();
+            }
+            else
+            {
+                Task.Factory.StartNew(action, CancellationToken.None, TaskCreationOptions.None, _mainTaskScheduler ?? TaskScheduler.Current);
             }
         }
 
@@ -555,9 +618,16 @@ namespace MediaBrowser.ServerApplication
 
         private static void ShutdownWindowsApplication()
         {
-            _logger.Info("Calling Application.Exit");
-            Application.Exit();
+            if (_serverNotifyIcon != null)
+            {
+                _serverNotifyIcon.Dispose();
+                _serverNotifyIcon = null;
+            }
 
+            //_logger.Info("Calling Application.Exit");
+            //Application.Exit();
+
+            _logger.Info("Calling Environment.Exit");
             Environment.Exit(0);
 
             _logger.Info("Calling ApplicationTaskCompletionSource.SetResult");
@@ -577,108 +647,39 @@ namespace MediaBrowser.ServerApplication
             }
         }
 
-        private static async Task InstallFrameworkV46IfNeeded(ILogger logger)
+        private static async Task InstallVcredist2013IfNeeded(ApplicationHost appHost, ILogger logger)
         {
-            bool installFrameworkV46 = false;
+            // Reference 
+            // http://stackoverflow.com/questions/12206314/detect-if-visual-c-redistributable-for-visual-studio-2012-is-installed
 
             try
             {
-                using (RegistryKey ndpKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry32)
-                    .OpenSubKey("SOFTWARE\\Microsoft\\NET Framework Setup\\NDP\\v4\\Full\\"))
+                var subkey = Environment.Is64BitProcess
+                    ? "SOFTWARE\\WOW6432Node\\Microsoft\\VisualStudio\\12.0\\VC\\Runtimes\\x64"
+                    : "SOFTWARE\\Microsoft\\VisualStudio\\12.0\\VC\\Runtimes\\x86";
+
+                using (RegistryKey ndpKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Default)
+                    .OpenSubKey(subkey))
                 {
-                    if (ndpKey != null && ndpKey.GetValue("Release") != null)
+                    if (ndpKey != null && ndpKey.GetValue("Version") != null)
                     {
-                        if ((int)ndpKey.GetValue("Release") <= 393295)
+                        var installedVersion = ((string)ndpKey.GetValue("Version")).TrimStart('v');
+                        if (installedVersion.StartsWith("12", StringComparison.OrdinalIgnoreCase))
                         {
-                            //Found framework V4, but not yet V4.6
-                            installFrameworkV46 = true;
+                            return;
                         }
-                    }
-                    else
-                    {
-                        //Nothing found in the registry for V4
-                        installFrameworkV46 = true;
                     }
                 }
             }
             catch (Exception ex)
             {
                 logger.ErrorException("Error getting .NET Framework version", ex);
-            }
-
-            _logger.Info(".NET Framework 4.6 found: {0}", !installFrameworkV46);
-
-            if (installFrameworkV46)
-            {
-                try
-                {
-                    await InstallFrameworkV46().ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    logger.ErrorException("Error installing .NET Framework version 4.6", ex);
-                }
-            }
-        }
-
-        private static async Task InstallFrameworkV46()
-        {
-            var httpClient = _appHost.HttpClient;
-
-            var tmp = await httpClient.GetTempFile(new HttpRequestOptions
-            {
-                Url = "https://github.com/MediaBrowser/Emby.Resources/raw/master/netframeworkV46/NDP46-KB3045560-Web.exe",
-                Progress = new Progress<double>()
-
-            }).ConfigureAwait(false);
-
-            var exePath = Path.ChangeExtension(tmp, ".exe");
-            File.Copy(tmp, exePath);
-            
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = exePath,
-
-                CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden,
-                Verb = "runas",
-                ErrorDialog = false,
-                Arguments = "/q /norestart"
-            };
-
-
-            _logger.Info("Running {0}", startInfo.FileName);
-
-            using (var process = Process.Start(startInfo))
-            {
-                process.WaitForExit();
-                //process.ExitCode
-                /*
-                0 --> Installation completed successfully.
-                1602 --> The user canceled installation.
-                1603 --> A fatal error occurred during installation.
-                1641 --> A restart is required to complete the installation. This message indicates success.
-                3010 --> A restart is required to complete the installation. This message indicates success.
-                5100 --> The user's computer does not meet system requirements.
-                 */
-            }
-        }
-
-        private static async Task InstallVcredistIfNeeded(ApplicationHost appHost, ILogger logger)
-        {
-            try
-            {
-                var version = ImageMagickEncoder.GetVersion();
                 return;
             }
-            catch (Exception ex)
-            {
-                logger.ErrorException("Error loading ImageMagick", ex);
-            }
 
             try
             {
-                await InstallVcredist().ConfigureAwait(false);
+                await InstallVcredist2013().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -686,13 +687,13 @@ namespace MediaBrowser.ServerApplication
             }
         }
 
-        private async static Task InstallVcredist()
+        private async static Task InstallVcredist2013()
         {
             var httpClient = _appHost.HttpClient;
 
             var tmp = await httpClient.GetTempFile(new HttpRequestOptions
             {
-                Url = GetVcredistUrl(),
+                Url = GetVcredist2013Url(),
                 Progress = new Progress<double>()
 
             }).ConfigureAwait(false);
@@ -718,7 +719,7 @@ namespace MediaBrowser.ServerApplication
             }
         }
 
-        private static string GetVcredistUrl()
+        private static string GetVcredist2013Url()
         {
             if (Environment.Is64BitProcess)
             {

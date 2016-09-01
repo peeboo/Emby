@@ -1,95 +1,65 @@
-﻿define(['appSettings', 'jQuery'], function (appSettings, $) {
+﻿define(['appSettings', 'apphost', 'emby-checkbox', 'emby-select', 'emby-input'], function (appSettings, appHost) {
 
     function loadForm(page, user) {
 
-        page.querySelector('#txtSyncPath').value = appSettings.syncPath();
+        page.querySelector('#txtSyncPath').value = appSettings.syncPath() || '';
         page.querySelector('#chkWifi').checked = appSettings.syncOnlyOnWifi();
-
-        var uploadServers = appSettings.cameraUploadServers();
-
-        page.querySelector('.uploadServerList').innerHTML = ConnectionManager.getSavedServers().map(function (s) {
-
-            var checkedHtml = uploadServers.indexOf(s.Id) == -1 ? '' : ' checked';
-            var html = '<paper-checkbox' + checkedHtml + ' class="chkUploadServer" data-id="' + s.Id + '">' + s.Name + '</paper-checkbox>';
-
-            return html;
-
-        }).join('');
-
-        Dashboard.hideLoadingMsg();
+        page.querySelector('.selectAudioBitrate').value = appSettings.maxStaticMusicBitrate() || '';
     }
 
-    function saveUser(page, user) {
+    function saveUser(page) {
 
-        appSettings.syncPath(page.querySelector('#txtSyncPath').value);
+        var syncPath = page.querySelector('#txtSyncPath').value;
+
+        appSettings.syncPath(syncPath);
         appSettings.syncOnlyOnWifi(page.querySelector('#chkWifi').checked);
-
-        appSettings.cameraUploadServers($(".chkUploadServer", page).get().filter(function (i) {
-
-            return i.checked;
-
-        }).map(function (i) {
-
-            return i.getAttribute('data-id');
-        }));
-
-        Dashboard.hideLoadingMsg();
-        require(['toast'], function (toast) {
-            toast(Globalize.translate('SettingsSaved'));
-        });
+        appSettings.maxStaticMusicBitrate(page.querySelector('.selectAudioBitrate').value || null);
     }
 
-    function onSubmit() {
+    return function (view, params) {
 
-        var page = $(this).parents('.page')[0];
+        view.querySelector('form').addEventListener('submit', function (e) {
 
-        Dashboard.showLoadingMsg();
+            saveUser(view);
 
-        var userId = getParameterByName('userId') || Dashboard.getCurrentUserId();
-
-        ApiClient.getUser(userId).then(function (user) {
-
-            saveUser(page, user);
-
+            // Disable default form submission
+            e.preventDefault();
+            return false;
         });
 
-        // Disable default form submission
-        return false;
-    }
-
-    $(document).on('pageinit', "#syncPreferencesPage", function () {
-
-        var page = this;
-
-        $('form', page).off('submit', onSubmit).on('submit', onSubmit);
-
-        $('.btnSelectSyncPath', page).on('click', function () {
+        view.querySelector('#btnSelectSyncPath').addEventListener('click', function () {
 
             require(['nativedirectorychooser'], function () {
                 NativeDirectoryChooser.chooseDirectory().then(function (path) {
-                    $('#txtSyncPath', page).val(path);
+
+                    if (path) {
+                        view.querySelector('#txtSyncPath').value = path;
+                    }
                 });
             });
         });
 
-    }).on('pageshow', "#syncPreferencesPage", function () {
+        view.addEventListener('viewshow', function () {
+            var page = this;
 
-        var page = this;
+            var userId = getParameterByName('userId') || Dashboard.getCurrentUserId();
 
-        Dashboard.showLoadingMsg();
+            ApiClient.getUser(userId).then(function (user) {
 
-        var userId = getParameterByName('userId') || Dashboard.getCurrentUserId();
+                loadForm(page, user);
+            });
 
-        ApiClient.getUser(userId).then(function (user) {
-
-            loadForm(page, user);
+            if (appHost.supports('customsyncpath')) {
+                page.querySelector('.fldSyncPath').classList.remove('hide');
+            } else {
+                page.querySelector('.fldSyncPath').classList.add('hide');
+            }
         });
 
-        if (AppInfo.supportsSyncPathSetting) {
-            page.querySelector('.fldSyncPath').classList.remove('hide');
-        } else {
-            page.querySelector('.fldSyncPath').classList.add('hide');
-        }
-    });
+        view.addEventListener('viewbeforehide', function () {
+
+            saveUser(this);
+        });
+    };
 
 });

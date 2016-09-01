@@ -14,6 +14,11 @@ namespace MediaBrowser.Model.Dlna
     /// </summary>
     public class StreamInfo
     {
+        public StreamInfo()
+        {
+            AudioCodecs = new string[] { };
+        }
+
         public string ItemId { get; set; }
 
         public PlayMethod PlayMethod { get; set; }
@@ -31,13 +36,14 @@ namespace MediaBrowser.Model.Dlna
         public string VideoProfile { get; set; }
 
         public bool CopyTimestamps { get; set; }
-        public bool ForceLiveStream { get; set; }
-        public string AudioCodec { get; set; }
+        public bool EnableSubtitlesInManifest { get; set; }
+        public string[] AudioCodecs { get; set; }
 
         public int? AudioStreamIndex { get; set; }
 
         public int? SubtitleStreamIndex { get; set; }
 
+        public int? TranscodingMaxAudioChannels { get; set; }
         public int? MaxAudioChannels { get; set; }
 
         public int? AudioBitrate { get; set; }
@@ -190,12 +196,16 @@ namespace MediaBrowser.Model.Dlna
         {
             List<NameValuePair> list = new List<NameValuePair>();
 
+            string audioCodecs = item.AudioCodecs.Length == 0 ?
+                string.Empty :
+                string.Join(",", item.AudioCodecs);
+
             list.Add(new NameValuePair("DeviceProfileId", item.DeviceProfileId ?? string.Empty));
             list.Add(new NameValuePair("DeviceId", item.DeviceId ?? string.Empty));
             list.Add(new NameValuePair("MediaSourceId", item.MediaSourceId ?? string.Empty));
             list.Add(new NameValuePair("Static", item.IsDirectStream.ToString().ToLower()));
             list.Add(new NameValuePair("VideoCodec", item.VideoCodec ?? string.Empty));
-            list.Add(new NameValuePair("AudioCodec", item.AudioCodec ?? string.Empty));
+            list.Add(new NameValuePair("AudioCodec", audioCodecs));
             list.Add(new NameValuePair("AudioStreamIndex", item.AudioStreamIndex.HasValue ? StringHelper.ToStringCultureInvariant(item.AudioStreamIndex.Value) : string.Empty));
             list.Add(new NameValuePair("SubtitleStreamIndex", item.SubtitleStreamIndex.HasValue && item.SubtitleDeliveryMethod != SubtitleDeliveryMethod.External ? StringHelper.ToStringCultureInvariant(item.SubtitleStreamIndex.Value) : string.Empty));
             list.Add(new NameValuePair("VideoBitrate", item.VideoBitrate.HasValue ? StringHelper.ToStringCultureInvariant(item.VideoBitrate.Value) : string.Empty));
@@ -205,7 +215,7 @@ namespace MediaBrowser.Model.Dlna
             list.Add(new NameValuePair("MaxWidth", item.MaxWidth.HasValue ? StringHelper.ToStringCultureInvariant(item.MaxWidth.Value) : string.Empty));
             list.Add(new NameValuePair("MaxHeight", item.MaxHeight.HasValue ? StringHelper.ToStringCultureInvariant(item.MaxHeight.Value) : string.Empty));
 
-            if (StringHelper.EqualsIgnoreCase(item.SubProtocol, "hls") && !item.ForceLiveStream)
+            if (StringHelper.EqualsIgnoreCase(item.SubProtocol, "hls"))
             {
                 list.Add(new NameValuePair("StartTimeTicks", string.Empty));
             }
@@ -235,9 +245,13 @@ namespace MediaBrowser.Model.Dlna
             }
 
             list.Add(new NameValuePair("CopyTimestamps", item.CopyTimestamps.ToString().ToLower()));
-            list.Add(new NameValuePair("ForceLiveStream", item.ForceLiveStream.ToString().ToLower()));
             list.Add(new NameValuePair("SubtitleMethod", item.SubtitleStreamIndex.HasValue && item.SubtitleDeliveryMethod != SubtitleDeliveryMethod.External ? item.SubtitleDeliveryMethod.ToString() : string.Empty));
-       
+
+            list.Add(new NameValuePair("TranscodingMaxAudioChannels", item.TranscodingMaxAudioChannels.HasValue ? StringHelper.ToStringCultureInvariant(item.TranscodingMaxAudioChannels.Value) : string.Empty));
+            list.Add(new NameValuePair("EnableSubtitlesInManifest", item.EnableSubtitlesInManifest.ToString().ToLower()));
+
+            list.Add(new NameValuePair("Tag", item.MediaSource.ETag ?? string.Empty));
+
             return list;
         }
 
@@ -275,7 +289,7 @@ namespace MediaBrowser.Model.Dlna
             // HLS will preserve timestamps so we can just grab the full subtitle stream
             long startPositionTicks = StringHelper.EqualsIgnoreCase(SubProtocol, "hls")
                 ? 0
-				: (PlayMethod == PlayMethod.Transcode && !CopyTimestamps ? StartPositionTicks : 0);
+                : (PlayMethod == PlayMethod.Transcode && !CopyTimestamps ? StartPositionTicks : 0);
 
             // First add the selected track
             if (SubtitleStreamIndex.HasValue)
@@ -332,7 +346,8 @@ namespace MediaBrowser.Model.Dlna
                 Name = stream.Language ?? "Unknown",
                 Format = subtitleProfile.Format,
                 Index = stream.Index,
-                DeliveryMethod = subtitleProfile.Method
+                DeliveryMethod = subtitleProfile.Method,
+                DisplayTitle = stream.DisplayTitle
             };
 
             if (info.DeliveryMethod == SubtitleDeliveryMethod.External)
@@ -551,9 +566,22 @@ namespace MediaBrowser.Model.Dlna
             {
                 MediaStream stream = TargetAudioStream;
 
-                return IsDirectStream
-                 ? (stream == null ? null : stream.Codec)
-                 : AudioCodec;
+                string inputCodec = stream == null ? null : stream.Codec;
+
+                if (IsDirectStream)
+                {
+                    return inputCodec;
+                }
+
+                foreach (string codec in AudioCodecs)
+                {
+                    if (StringHelper.EqualsIgnoreCase(codec, inputCodec))
+                    {
+                        return codec;
+                    }
+                }
+
+                return AudioCodecs.Length == 0 ? null : AudioCodecs[0];
             }
         }
 

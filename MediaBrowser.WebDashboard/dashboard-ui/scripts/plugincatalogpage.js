@@ -1,4 +1,4 @@
-﻿define(['jQuery'], function ($) {
+﻿define(['jQuery', 'cardStyle'], function ($) {
 
     // The base query options
     var query = {
@@ -35,9 +35,7 @@
         });
     }
     function populateList(options) {
-        requirejs(['scripts/ratingdialog'], function () {
-            populateListInternal(options);
-        });
+        populateListInternal(options);
     }
 
     function populateListInternal(options) {
@@ -121,10 +119,22 @@
                 return 0;
             });
 
+            html += '<div class="itemsContainer vertical-wrap">';
             var limit = screen.availWidth >= 1920 ? 15 : 12;
             for (i = 0, length = Math.min(topPlugins.length, limit) ; i < length; i++) {
                 html += getPluginHtml(topPlugins[i], options, installedPlugins);
             }
+            html += '</div>';
+            html += '<br/>';
+            html += '<br/>';
+        }
+
+        var hasOpenTag = false;
+        currentCategory = null;
+
+        if (options.showCategory === false) {
+            html += '<div class="itemsContainer vertical-wrap">';
+            hasOpenTag = true;
         }
 
         for (i = 0, length = availablePlugins.length; i < length; i++) {
@@ -137,12 +147,15 @@
 
                 if (options.showCategory !== false) {
                     if (currentCategory) {
-                        html += '<br/>';
+                        hasOpenTag = false;
+                        html += '</div>';
                         html += '<br/>';
                         html += '<br/>';
                     }
 
                     html += '<div class="detailSectionHeader">' + category + '</div>';
+                    html += '<div class="itemsContainer vertical-wrap">';
+                    hasOpenTag = true;
                 }
 
                 currentCategory = category;
@@ -150,6 +163,10 @@
 
             html += getPluginHtml(plugin, options, installedPlugins);
 
+        }
+
+        if (hasOpenTag) {
+            html += '</div>';
         }
 
         if (!availablePlugins.length && options.noItemsElement) {
@@ -171,12 +188,12 @@
         }
         var target = plugin.externalUrl ? ' target="_blank"' : '';
 
-        html += "<div class='card backdropCard bottomPaddedCard'>";
+        html += "<div class='card backdropCard scalableCard backdropCard-scalable'>";
 
-        html += '<div class="cardBox visualCardBox">';
-        html += '<div class="cardScalable">';
+        html += '<div class="cardBox cardBox-bottompadded visualCardBox">';
+        html += '<div class="cardScalable visualCardBox-cardScalable">';
 
-        html += '<div class="cardPadder"></div>';
+        html += '<div class="cardPadder cardPadder-backdrop"></div>';
 
         html += '<a class="cardContent" href="' + href + '"' + target + '>';
         if (plugin.thumbImage) {
@@ -200,20 +217,25 @@
         // cardScalable
         html += "</div>";
 
-        html += '<div class="cardFooter">';
+        html += '<div class="cardFooter visualCardBox-cardFooter">';
 
         html += "<div class='cardText'>";
         html += plugin.name;
         html += "</div>";
 
         if (!plugin.isExternal) {
-            html += "<div class='cardText packageReviewText'>";
-            html += plugin.price > 0 ? "$" + plugin.price.toFixed(2) : Globalize.translate('LabelFree');
-            html += RatingHelpers.getStoreRatingHtml(plugin.avgRating, plugin.id, plugin.name, true);
+            html += "<div class='cardText' style='display:flex;align-items:center;'>";
 
-            html += "<span class='storeReviewCount'>";
-            html += " " + Globalize.translate('LabelNumberReviews').replace("{0}", plugin.totalRatings);
-            html += "</span>";
+            if (plugin.avgRating) {
+                html += '<i class="md-icon" style="color:#cc3333;margin-right:.25em;">star</i>';
+                html += plugin.avgRating.toFixed(1);
+            }
+
+            if (plugin.totalRatings) {
+                html += "<div style='margin-left:.5em;'>";
+                html += " " + Globalize.translate('LabelNumberReviews').replace("{0}", plugin.totalRatings);
+            }
+            html += "</div>";
 
             html += "</div>";
         }
@@ -243,6 +265,18 @@
         return html;
     }
 
+    function getTabs() {
+        return [
+        {
+            href: 'plugins.html',
+            name: Globalize.translate('TabMyPlugins')
+        },
+         {
+             href: 'plugincatalog.html',
+             name: Globalize.translate('TabCatalog')
+         }];
+    }
+
     $(document).on('pageinit', "#pluginCatalogPage", function () {
 
         var page = this;
@@ -261,6 +295,7 @@
 
     }).on('pageshow', "#pluginCatalogPage", function () {
 
+        LibraryMenu.setTabs('plugins', 1, getTabs);
         var page = this;
 
         reloadList(page);

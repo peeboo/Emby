@@ -1,4 +1,4 @@
-﻿define(['dialogHelper', 'jQuery', 'paper-fab'], function (dialogHelper, $) {
+﻿define(['dialogHelper', 'jQuery', 'emby-button'], function (dialogHelper, $) {
 
     var currentItemId;
     var currentFile;
@@ -145,15 +145,14 @@
 
             dlg.classList.add('ui-body-' + theme);
             dlg.classList.add('background-theme-' + theme);
-            dlg.classList.add('popupEditor');
 
             var html = '';
             html += '<h2 class="dialogHeader">';
-            html += '<paper-fab icon="arrow-back" mini class="btnCloseDialog" tabindex="-1"></paper-fab>';
+            html += '<button type="button" is="emby-button" icon="arrow-back" class="fab mini btnCloseDialog autoSize" tabindex="-1"><i class="md-icon">&#xE5C4;</i></button>';
             html += '<div style="display:inline-block;margin-left:.6em;vertical-align:middle;">' + Globalize.translate('HeaderUploadImage') + '</div>';
             html += '</h2>';
 
-            html += '<div class="editorContent">';
+            html += '<div class="editorContent" style="padding:0 1em;">';
             html += Globalize.translateDocument(template);
             html += '</div>';
 

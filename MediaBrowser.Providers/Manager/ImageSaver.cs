@@ -133,6 +133,9 @@ namespace MediaBrowser.Providers.Manager
             source = memoryStream;
 
             var currentImage = GetCurrentImage(item, type, index);
+            var currentImageIsLocalFile = currentImage != null && currentImage.IsLocalFile;
+            var currentImagePath = currentImage == null ? null : currentImage.Path;
+
             var savedPaths = new List<string>();
 
             using (source)
@@ -157,9 +160,11 @@ namespace MediaBrowser.Providers.Manager
             SetImagePath(item, type, imageIndex, savedPaths[0]);
 
             // Delete the current path
-            if (currentImage != null && currentImage.IsLocalFile && !savedPaths.Contains(currentImage.Path, StringComparer.OrdinalIgnoreCase))
+            if (currentImageIsLocalFile && !savedPaths.Contains(currentImagePath, StringComparer.OrdinalIgnoreCase))
             {
-                var currentPath = currentImage.Path;
+                var currentPath = currentImagePath;
+
+                _logger.Debug("Deleting previous image {0}", currentPath);
 
                 _libraryMonitor.ReportFileSystemChangeBeginning(currentPath);
 
@@ -276,7 +281,7 @@ namespace MediaBrowser.Providers.Manager
         /// <returns>IEnumerable{System.String}.</returns>
         private string[] GetSavePaths(IHasImages item, ImageType type, int? imageIndex, string mimeType, bool saveLocally)
         {
-            if (_config.Configuration.ImageSavingConvention == ImageSavingConvention.Legacy || !saveLocally)
+            if (!saveLocally || (_config.Configuration.ImageSavingConvention == ImageSavingConvention.Legacy))
             {
                 return new[] { GetStandardSavePath(item, type, imageIndex, mimeType, saveLocally) };
             }
@@ -375,11 +380,11 @@ namespace MediaBrowser.Providers.Manager
             }
 
             string filename;
-            var folderName = item is MusicAlbum || 
-                item is MusicArtist || 
-                item is PhotoAlbum || 
-                (saveLocally && _config.Configuration.ImageSavingConvention == ImageSavingConvention.Legacy) ? 
-                "folder" : 
+            var folderName = item is MusicAlbum ||
+                item is MusicArtist ||
+                item is PhotoAlbum ||
+                (saveLocally && _config.Configuration.ImageSavingConvention == ImageSavingConvention.Legacy) ?
+                "folder" :
                 "poster";
 
             switch (type)

@@ -1,43 +1,32 @@
-﻿<div id="devicePage" data-role="page" class="page type-interior devicesPage" data-helpurl="https://github.com/MediaBrowser/Wiki/wiki/Devices" data-require="scripts/device,paper-input">
+﻿<div id="devicePage" data-role="page" class="page type-interior devicesPage" data-helpurl="https://github.com/MediaBrowser/Wiki/wiki/Devices" data-require="scripts/device,emby-input,emby-button">
 
     <div data-role="content">
         <div class="content-primary">
 
-            <div data-role="controlgroup" data-type="horizontal" class="localnav" data-mini="true">
-                <a href="devices.html" data-role="button" class="ui-btn-active">${TabDevices}</a>
-                <a href="devicesupload.html" data-role="button">${TabCameraUpload}</a>
-            </div>
 
-            <div class="readOnlyContent">
+            <form class="deviceForm">
 
-                <form class="deviceForm">
+                <p class="reportedName">
 
-                    <p class="reportedName">
+                </p>
+                <div class="inputContainer">
+                    <input is="emby-input" type="text" id="txtCustomName" label="${LabelCustomDeviceDisplayName}" />
+                    <div class="fieldDescription">${LabelCustomDeviceDisplayNameHelp}</div>
+                </div>
+                <div class="inputContainer hide" id="fldCameraUploadPath">
+                    <div style="display: flex; align-items: center;">
+                        <div style="flex-grow:1;">
+                            <input is="emby-input" id="txtUploadPath" label="${LabelCameraUploadPath}" required="required" autocomplete="off" />
+                        </div>
+                        <button type="button" is="paper-icon-button-light" id="btnSelectUploadPath" title="${ButtonSelectDirectory}" class="autoSize"><i class="md-icon">search</i></button>
+                    </div>
+                    <div class="fieldDescription">${LabelCameraUploadPathHelp}</div>
+                </div>
+                <div>
+                    <button is="emby-button" type="submit" class="raised submit block"><i class="md-icon">check</i><span>${ButtonSave}</span></button>
+                </div>
+            </form>
 
-                    </p>
-                    <ul data-role="listview" class="ulForm">
-                        <li>
-                            <paper-input type="text" id="txtCustomName" label="${LabelCustomDeviceDisplayName}"></paper-input>
-                            <div class="fieldDescription">${LabelCustomDeviceDisplayNameHelp}</div>
-                        </li>
-                        <li id="fldCameraUploadPath" style="display:none;">
-                            <paper-input id="txtUploadPath" label="${LabelCameraUploadPath}" style="width:85%;display:inline-block;"></paper-input>
-                            <paper-icon-button id="btnSelectUploadPath" icon="search"></paper-icon-button>
-                            <div class="fieldDescription">${LabelCameraUploadPathHelp}</div>
-                        </li>
-
-                    </ul><br />
-                    <ul data-role="listview" class="ulForm">
-                        <li>
-                            <button type="submit" data-role="none" class="clearButton">
-                                <paper-button raised class="submit block"><iron-icon icon="check"></iron-icon><span>${ButtonSave}</span></paper-button>
-                            </button>
-                        </li>
-                    </ul>
-
-                </form>
-
-            </div>
         </div>
     </div>
 </div>

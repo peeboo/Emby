@@ -1,4 +1,4 @@
-define(['browser', 'appSettings'], function (browser, appSettings) {
+define(['browser', 'appSettings', 'events'], function (browser, appSettings, events) {
 
     function setLayout(self, layout, selectedLayout) {
 
@@ -32,6 +32,8 @@ define(['browser', 'appSettings'], function (browser, appSettings) {
                     appSettings.set('layout', layout);
                 }
             }
+
+            events.trigger(self, 'modechange');
         };
 
         self.getSavedLayout = function (layout) {
@@ -44,7 +46,7 @@ define(['browser', 'appSettings'], function (browser, appSettings) {
             // Take a guess at initial layout. The consuming app can override
             if (browser.mobile) {
                 self.setLayout('mobile', false);
-            } else if (browser.tv) {
+            } else if (browser.tv || browser.xboxOne) {
                 self.setLayout('tv', false);
             } else {
                 self.setLayout(self.undetectedAutoLayout || 'desktop', false);

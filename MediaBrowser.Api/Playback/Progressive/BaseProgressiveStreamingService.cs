@@ -13,6 +13,7 @@ using ServiceStack.Web;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonIO;
@@ -113,11 +114,11 @@ namespace MediaBrowser.Api.Playback.Progressive
         /// <param name="request">The request.</param>
         /// <param name="isHeadRequest">if set to <c>true</c> [is head request].</param>
         /// <returns>Task.</returns>
-        protected object ProcessRequest(StreamRequest request, bool isHeadRequest)
+        protected async Task<object> ProcessRequest(StreamRequest request, bool isHeadRequest)
         {
             var cancellationTokenSource = new CancellationTokenSource();
 
-            var state = GetState(request, cancellationTokenSource.Token).Result;
+            var state = await GetState(request, cancellationTokenSource.Token).ConfigureAwait(false);
 
             var responseHeaders = new Dictionary<string, string>();
 
@@ -128,7 +129,8 @@ namespace MediaBrowser.Api.Playback.Progressive
 
                 using (state)
                 {
-                    return GetStaticRemoteStreamResult(state, responseHeaders, isHeadRequest, cancellationTokenSource).Result;
+                    return await GetStaticRemoteStreamResult(state, responseHeaders, isHeadRequest, cancellationTokenSource)
+                                .ConfigureAwait(false);
                 }
             }
 
@@ -138,9 +140,10 @@ namespace MediaBrowser.Api.Playback.Progressive
             }
 
             var outputPath = state.OutputFilePath;
-			var outputPathExists = FileSystem.FileExists(outputPath);
+            var outputPathExists = FileSystem.FileExists(outputPath);
 
-            var isTranscodeCached = outputPathExists && !ApiEntryPoint.Instance.HasActiveTranscodingJob(outputPath, TranscodingJobType.Progressive);
+            var transcodingJob = ApiEntryPoint.Instance.GetTranscodingJob(outputPath, TranscodingJobType.Progressive);
+            var isTranscodeCached = outputPathExists && transcodingJob != null;
 
             AddDlnaHeaders(state, responseHeaders, request.Static || isTranscodeCached);
 
@@ -151,41 +154,64 @@ namespace MediaBrowser.Api.Playback.Progressive
 
                 using (state)
                 {
-                    return ResultFactory.GetStaticFileResult(Request, new StaticFileResultOptions
+                    TimeSpan? cacheDuration = null;
+
+                    if (!string.IsNullOrEmpty(request.Tag))
+                    {
+                        cacheDuration = TimeSpan.FromDays(365);
+                    }
+
+                    return await ResultFactory.GetStaticFileResult(Request, new StaticFileResultOptions
                     {
                         ResponseHeaders = responseHeaders,
                         ContentType = contentType,
                         IsHeadRequest = isHeadRequest,
-                        Path = state.MediaPath
-                    });
+                        Path = state.MediaPath,
+                        CacheDuration = cacheDuration
+
+                    }).ConfigureAwait(false);
                 }
             }
 
-            // Not static but transcode cache file exists
-            if (isTranscodeCached)
-            {
-                var contentType = state.GetMimeType(outputPath);
+            //// Not static but transcode cache file exists
+            //if (isTranscodeCached && state.VideoRequest == null)
+            //{
+            //    var contentType = state.GetMimeType(outputPath);
 
-                try
-                {
-                    return ResultFactory.GetStaticFileResult(Request, new StaticFileResultOptions
-                    {
-                        ResponseHeaders = responseHeaders,
-                        ContentType = contentType,
-                        IsHeadRequest = isHeadRequest,
-                        Path = outputPath
-                    });
-                }
-                finally
-                {
-                    state.Dispose();
-                }
-            }
+            //    try
+            //    {
+            //        if (transcodingJob != null)
+            //        {
+            //            ApiEntryPoint.Instance.OnTranscodeBeginRequest(transcodingJob);
+            //        }
+
+            //        return await ResultFactory.GetStaticFileResult(Request, new StaticFileResultOptions
+            //        {
+            //            ResponseHeaders = responseHeaders,
+            //            ContentType = contentType,
+            //            IsHeadRequest = isHeadRequest,
+            //            Path = outputPath,
+            //            FileShare = FileShare.ReadWrite,
+            //            OnComplete = () =>
+            //            {
+            //                if (transcodingJob != null)
+            //                {
+            //                    ApiEntryPoint.Instance.OnTranscodeEndRequest(transcodingJob);
+            //                }
+            //            }
+
+            //        }).ConfigureAwait(false);
+            //    }
+            //    finally
+            //    {
+            //        state.Dispose();
+            //    }
+            //}
 
             // Need to start ffmpeg
             try
             {
-                return GetStreamResult(state, responseHeaders, isHeadRequest, cancellationTokenSource).Result;
+                return await GetStreamResult(state, responseHeaders, isHeadRequest, cancellationTokenSource).ConfigureAwait(false);
             }
             catch
             {
@@ -229,7 +255,7 @@ namespace MediaBrowser.Api.Playback.Progressive
 
             if (trySupportSeek)
             {
-                foreach (var name in new[] {"Content-Range", "Accept-Ranges"})
+                foreach (var name in new[] { "Content-Range", "Accept-Ranges" })
                 {
                     var val = response.Headers[name];
                     if (!string.IsNullOrWhiteSpace(val))
@@ -242,12 +268,12 @@ namespace MediaBrowser.Api.Playback.Progressive
             {
                 responseHeaders["Accept-Ranges"] = "none";
             }
-            
+
             if (response.ContentLength.HasValue)
             {
                 responseHeaders["Content-Length"] = response.ContentLength.Value.ToString(UsCulture);
             }
-            
+
             if (isHeadRequest)
             {
                 using (response)
@@ -324,7 +350,7 @@ namespace MediaBrowser.Api.Playback.Progressive
             {
                 TranscodingJob job;
 
-				if (!FileSystem.FileExists(outputPath))
+                if (!FileSystem.FileExists(outputPath))
                 {
                     job = await StartFfMpeg(state, outputPath, cancellationTokenSource).ConfigureAwait(false);
                 }
@@ -334,17 +360,19 @@ namespace MediaBrowser.Api.Playback.Progressive
                     state.Dispose();
                 }
 
-                var result = new ProgressiveStreamWriter(outputPath, Logger, FileSystem, job);
+                var outputHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-                result.Options["Content-Type"] = contentType;
+                outputHeaders["Content-Type"] = contentType;
 
                 // Add the response headers to the result object
                 foreach (var item in responseHeaders)
                 {
-                    result.Options[item.Key] = item.Value;
+                    outputHeaders[item.Key] = item.Value;
                 }
 
-                return result;
+                var streamSource = new ProgressiveFileCopier(FileSystem, outputPath, outputHeaders, job, Logger, CancellationToken.None);
+
+                return ResultFactory.GetAsyncStreamWriter(streamSource);
             }
             finally
             {
@@ -363,7 +391,7 @@ namespace MediaBrowser.Api.Playback.Progressive
 
             if (totalBitrate > 0 && state.RunTimeTicks.HasValue)
             {
-                return Convert.ToInt64(totalBitrate * TimeSpan.FromTicks(state.RunTimeTicks.Value).TotalSeconds);
+                return Convert.ToInt64(totalBitrate * TimeSpan.FromTicks(state.RunTimeTicks.Value).TotalSeconds / 8);
             }
 
             return null;

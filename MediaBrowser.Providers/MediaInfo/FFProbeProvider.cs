@@ -30,6 +30,7 @@ namespace MediaBrowser.Providers.MediaInfo
         ICustomMetadataProvider<Movie>,
         ICustomMetadataProvider<LiveTvVideoRecording>,
         ICustomMetadataProvider<LiveTvAudioRecording>,
+        ICustomMetadataProvider<Trailer>,
         ICustomMetadataProvider<Video>,
         ICustomMetadataProvider<Audio>,
         IHasItemChangeMonitor,
@@ -73,6 +74,11 @@ namespace MediaBrowser.Providers.MediaInfo
         }
 
         public Task<ItemUpdateType> FetchAsync(LiveTvVideoRecording item, MetadataRefreshOptions options, CancellationToken cancellationToken)
+        {
+            return FetchVideoInfo(item, options, cancellationToken);
+        }
+
+        public Task<ItemUpdateType> FetchAsync(Trailer item, MetadataRefreshOptions options, CancellationToken cancellationToken)
         {
             return FetchVideoInfo(item, options, cancellationToken);
         }
@@ -165,9 +171,10 @@ namespace MediaBrowser.Providers.MediaInfo
 
         public bool HasChanged(IHasMetadata item, IDirectoryService directoryService)
         {
-            if (item.DateModifiedDuringLastRefresh.HasValue)
+            if (item.EnableRefreshOnDateModifiedChange && !string.IsNullOrWhiteSpace(item.Path) && item.LocationType == LocationType.FileSystem)
             {
-                if (item.DateModifiedDuringLastRefresh.Value != item.DateModified)
+                var file = directoryService.GetFile(item.Path);
+                if (file != null && file.LastWriteTimeUtc != item.DateModified)
                 {
                     return true;
                 }
